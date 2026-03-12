@@ -137,7 +137,7 @@ function SignInScreen() {
     setLoading(true);
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: window.location.origin + window.location.pathname + window.location.hash },
+      options: { redirectTo:'https://duo-challenge-tracker-brown.vercel.app'},
     });
     if (error) { console.error(error); setLoading(false); }
   };
