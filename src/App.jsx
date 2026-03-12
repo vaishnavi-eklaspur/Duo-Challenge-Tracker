@@ -14,8 +14,6 @@ const supabase = createClient(
 // ============================================================
 // HELPERS
 // ============================================================
-const LS_KEY = 'challenge_user_name';
-
 function possessive(name) {
   if (!name) return '';
   return name.endsWith('s') ? `${name}'` : `${name}'s`;
@@ -43,6 +41,25 @@ function todayStr() {
 
 function computeCurrentDay(startDate) {
   return daysBetween(startDate, todayStr()) + 1;
+}
+
+function generateRoomId() {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  let result = '';
+  const arr = new Uint8Array(6);
+  crypto.getRandomValues(arr);
+  for (let i = 0; i < 6; i++) result += chars[arr[i] % chars.length];
+  return result;
+}
+
+function getRoomIdFromHash() {
+  const hash = window.location.hash;
+  const match = hash.match(/^#\/room\/([A-Za-z0-9]{6})$/);
+  return match ? match[1] : null;
+}
+
+function setHashRoute(roomId) {
+  window.location.hash = roomId ? `#/room/${roomId}` : '';
 }
 
 // ============================================================
@@ -107,6 +124,134 @@ function GlobalStyles() {
       }
       input:focus { outline: none; }
     `}</style>
+  );
+}
+
+// ============================================================
+// SIGN-IN SCREEN
+// ============================================================
+function SignInScreen() {
+  const [loading, setLoading] = useState(false);
+
+  const handleGoogleSignIn = async () => {
+    setLoading(true);
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: window.location.origin + window.location.pathname + window.location.hash },
+    });
+    if (error) { console.error(error); setLoading(false); }
+  };
+
+  return (
+    <div className="flex flex-col items-center justify-center min-h-screen px-6 animate-fade-in">
+      <h1 className="font-syne text-text-primary text-3xl font-extrabold mb-2">Duo Challenge Tracker</h1>
+      <p className="font-mono text-text-muted text-sm mb-10">Sign in to start or join a challenge.</p>
+      <button
+        onClick={handleGoogleSignIn}
+        disabled={loading}
+        className="flex items-center gap-3 bg-surface border border-border-muted text-text-primary font-syne font-semibold px-8 py-4 rounded-[4px] hover:border-amber transition-colors disabled:opacity-50"
+      >
+        <svg width="20" height="20" viewBox="0 0 48 48"><path fill="#4285F4" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#34A853" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59a14.5 14.5 0 0 1 0-9.18l-7.98-6.19a24.01 24.01 0 0 0 0 21.56l7.98-6.19z"/><path fill="#EA4335" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+        {loading ? 'Signing in...' : 'Continue with Google'}
+      </button>
+    </div>
+  );
+}
+
+// ============================================================
+// DASHBOARD SCREEN (multi-room)
+// ============================================================
+function Dashboard({ user, onEnterRoom }) {
+  const [rooms, setRooms] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [creating, setCreating] = useState(false);
+
+  useEffect(() => {
+    const fetchRooms = async () => {
+      const { data, error } = await supabase
+        .from('challenge_meta')
+        .select('*')
+        .or(`user_a_id.eq.${user.id},user_b_id.eq.${user.id}`);
+      if (!error && data) setRooms(data);
+      setLoading(false);
+    };
+    fetchRooms();
+  }, [user.id]);
+
+  const handleNewChallenge = async () => {
+    if (creating) return;
+    setCreating(true);
+    const roomId = generateRoomId();
+    setHashRoute(roomId);
+    onEnterRoom(roomId);
+  };
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+  };
+
+  const getPartnerName = (room) => {
+    if (room.user_a_id === user.id) return room.user_b_name || 'Waiting for partner';
+    return room.user_a_name;
+  };
+
+  const getRoomProgress = (room) => {
+    const cd = computeCurrentDay(room.start_date);
+    const clamped = Math.min(Math.max(cd, 1), room.duration_days);
+    return { currentDay: clamped, total: room.duration_days, isOver: cd > room.duration_days };
+  };
+
+  return (
+    <div className="min-h-screen bg-bg">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+        <h1 className="font-syne text-text-primary text-lg font-extrabold">Your Challenges</h1>
+        <button onClick={handleSignOut} className="font-mono text-text-muted text-xs hover:text-text-primary transition-colors">Sign out</button>
+      </div>
+      <div className="max-w-xl mx-auto px-4 py-6 animate-fade-in">
+        {loading ? (
+          <p className="font-mono text-text-muted text-sm animate-pulse">Loading...</p>
+        ) : (
+          <>
+            {rooms.length > 0 && (
+              <div className="space-y-3 mb-8">
+                {rooms.map((room) => {
+                  const progress = getRoomProgress(room);
+                  return (
+                    <button
+                      key={room.id}
+                      onClick={() => { setHashRoute(room.room_id); onEnterRoom(room.room_id); }}
+                      className="w-full text-left bg-surface border border-border-muted rounded-[4px] p-4 hover:border-amber transition-colors"
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="font-syne text-text-primary font-semibold">{getPartnerName(room)}</span>
+                        <span className="font-mono text-text-muted text-xs">{room.room_id}</span>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <span className="font-mono text-text-muted text-xs">{room.duration_days} days</span>
+                        <span className="font-mono text-text-muted text-xs">Started {formatDate(room.start_date)}</span>
+                        <span className="font-mono text-amber text-xs">
+                          {progress.isOver ? 'Complete' : `Day ${progress.currentDay}/${progress.total}`}
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            {rooms.length === 0 && (
+              <p className="font-mono text-text-muted text-sm mb-8">No challenges yet. Start one and share the link with your partner.</p>
+            )}
+            <button
+              onClick={handleNewChallenge}
+              disabled={creating}
+              className="bg-amber text-bg font-syne font-semibold px-8 py-3 rounded-[4px] hover:opacity-90 transition-opacity disabled:opacity-50"
+            >
+              Start a new challenge
+            </button>
+          </>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -311,28 +456,12 @@ function WaitingScreen({ url }) {
   );
 }
 
-function PathCScreen({ userAName, userBName, onSelect }) {
-  return (
-    <div className="flex flex-col items-center justify-center min-h-screen px-6 animate-fade-in">
-      <h2 className="font-syne text-text-primary text-2xl font-extrabold mb-2">Welcome back. Who are you?</h2>
-      <p className="font-mono text-text-muted text-sm mb-8">Select your name to continue.</p>
-      <div className="flex flex-col sm:flex-row gap-4">
-        {[userAName, userBName].map((n) => (
-          <button key={n} onClick={() => onSelect(n)} className="bg-surface border border-border-muted text-text-primary font-syne text-xl font-semibold px-10 py-6 rounded-[4px] hover:border-amber transition-colors">
-            {n}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 // ============================================================
 // ONBOARDING ORCHESTRATOR
 // ============================================================
-function Onboarding({ meta, onComplete }) {
+function Onboarding({ meta, roomId, user, onComplete }) {
   const isFirstUser = !meta;
-  const isSecondUser = meta && !meta.user_b_name;
+  const isSecondUser = meta && !meta.user_b_id;
 
   const [step, setStep] = useState(1);
   const [name, setName] = useState('');
@@ -341,8 +470,6 @@ function Onboarding({ meta, onComplete }) {
   const [duration, setDuration] = useState(21);
   const [startDate, setStartDate] = useState(todayStr());
   const [submitting, setSubmitting] = useState(false);
-
-  const totalSteps = isFirstUser ? 4 : 3;
 
   const validateName = () => {
     const trimmed = name.trim();
@@ -361,7 +488,7 @@ function Onboarding({ meta, onComplete }) {
   const handleTasksNext = () => {
     if (tasks.every((t) => t.trim().length > 0)) {
       if (isFirstUser) setStep(3);
-      else setStep(3); // review for second user
+      else setStep(3);
     }
   };
 
@@ -374,19 +501,23 @@ function Onboarding({ meta, onComplete }) {
     const trimmedTasks = tasks.map((t) => t.trim());
     try {
       const { error: metaErr } = await supabase.from('challenge_meta').insert({
+        room_id: roomId,
+        user_a_id: user.id,
         user_a_name: trimmedName,
+        user_b_id: null,
         user_b_name: null,
         start_date: startDate,
         duration_days: duration,
       });
       if (metaErr) throw metaErr;
       const { error: configErr } = await supabase.from('challenge_config').insert({
+        room_id: roomId,
+        user_id: user.id,
         user_name: trimmedName,
         tasks: trimmedTasks,
         task_count: trimmedTasks.length,
       });
       if (configErr) throw configErr;
-      localStorage.setItem(LS_KEY, trimmedName);
       onComplete(trimmedName, 'waiting');
     } catch (e) {
       console.error(e);
@@ -400,15 +531,19 @@ function Onboarding({ meta, onComplete }) {
     const trimmedName = name.trim();
     const trimmedTasks = tasks.map((t) => t.trim());
     try {
-      const { error: metaErr } = await supabase.from('challenge_meta').update({ user_b_name: trimmedName }).eq('id', meta.id);
+      const { error: metaErr } = await supabase.from('challenge_meta').update({
+        user_b_id: user.id,
+        user_b_name: trimmedName,
+      }).eq('id', meta.id);
       if (metaErr) throw metaErr;
       const { error: configErr } = await supabase.from('challenge_config').insert({
+        room_id: roomId,
+        user_id: user.id,
         user_name: trimmedName,
         tasks: trimmedTasks,
         task_count: trimmedTasks.length,
       });
       if (configErr) throw configErr;
-      localStorage.setItem(LS_KEY, trimmedName);
       onComplete(trimmedName, 'app');
     } catch (e) {
       console.error(e);
@@ -416,7 +551,7 @@ function Onboarding({ meta, onComplete }) {
     }
   };
 
-  // PATH A
+  // PATH A — first user
   if (isFirstUser) {
     if (step === 1) {
       return (
@@ -456,7 +591,7 @@ function Onboarding({ meta, onComplete }) {
     }
   }
 
-  // PATH B
+  // PATH B — second user
   if (isSecondUser) {
     if (step === 1) {
       return (
@@ -586,22 +721,25 @@ function ProgressRing({ pct, name, streak, perfectDays }) {
 function ChainGrid({ meta, configs, logs, currentDay }) {
   const gridRef = useRef(null);
   const durationDays = meta.duration_days;
-  const users = [meta.user_a_name, meta.user_b_name].filter(Boolean);
+  const users = [
+    { id: meta.user_a_id, name: meta.user_a_name },
+    meta.user_b_id ? { id: meta.user_b_id, name: meta.user_b_name } : null,
+  ].filter(Boolean);
 
-  const getTaskCount = (userName) => {
-    const cfg = configs.find((c) => c.user_name === userName);
+  const getTaskCount = (userId) => {
+    const cfg = configs.find((c) => c.user_id === userId);
     return cfg ? cfg.task_count : 0;
   };
 
-  const getCompletedCount = (userName, day) => {
-    return logs.filter((l) => l.user_name === userName && l.day === day && l.completed).length;
+  const getCompletedCount = (userId, day) => {
+    return logs.filter((l) => l.user_id === userId && l.day === day && l.completed).length;
   };
 
-  const getCellColor = (userName, day) => {
+  const getCellColor = (userId, day) => {
     if (day > currentDay) return '#0f0f0f';
-    const taskCount = getTaskCount(userName);
+    const taskCount = getTaskCount(userId);
     if (taskCount === 0) return '#0f0f0f';
-    const completed = getCompletedCount(userName, day);
+    const completed = getCompletedCount(userId, day);
     if (completed === 0) return '#1a0a0a';
     if (completed >= taskCount) return '#f5a623';
     return 'rgba(245, 166, 35, 0.3)';
@@ -609,9 +747,9 @@ function ChainGrid({ meta, configs, logs, currentDay }) {
 
   const getTooltip = (day) => {
     const parts = users.map((u) => {
-      const tc = getTaskCount(u);
-      const c = getCompletedCount(u, day);
-      return `${u}: ${c}/${tc}`;
+      const tc = getTaskCount(u.id);
+      const c = getCompletedCount(u.id, day);
+      return `${u.name}: ${c}/${tc}`;
     });
     return `Day ${day} — ${parts.join(' | ')}`;
   };
@@ -620,15 +758,15 @@ function ChainGrid({ meta, configs, logs, currentDay }) {
     <div ref={gridRef} id="chain-grid" className="w-full">
       <p className="font-syne font-semibold text-text-muted text-[0.65rem] uppercase tracking-[0.15em] mb-4">THE CHAIN</p>
       <div className="space-y-2 overflow-x-auto">
-        {users.map((userName) => (
-          <div key={userName} className="flex items-center gap-2">
-            <span className="font-mono text-text-muted text-xs w-20 text-right shrink-0 truncate">{userName}</span>
+        {users.map((u) => (
+          <div key={u.id} className="flex items-center gap-2">
+            <span className="font-mono text-text-muted text-xs w-20 text-right shrink-0 truncate">{u.name}</span>
             <div className="flex gap-[3px] flex-1 min-w-0">
               {Array.from({ length: durationDays }, (_, i) => i + 1).map((day) => (
                 <div key={day} className="tooltip-container" style={{ flex: '1 1 0', maxWidth: '24px' }}>
                   <div
                     className={`aspect-square rounded-[2px] ${day === currentDay ? 'cell-today border-[1.5px] border-amber' : ''}`}
-                    style={{ backgroundColor: getCellColor(userName, day), minWidth: '10px' }}
+                    style={{ backgroundColor: getCellColor(u.id, day), minWidth: '10px' }}
                   />
                   {day <= currentDay && <span className="tooltip-text">{getTooltip(day)}</span>}
                 </div>
@@ -657,36 +795,60 @@ function ChainGrid({ meta, configs, logs, currentDay }) {
 // ============================================================
 // SETTINGS PANEL
 // ============================================================
-function SettingsPanel({ open, onClose, myName, partnerName, myConfig, partnerConfig, meta, currentDay, onTasksSaved, onResetToday }) {
+function SettingsPanel({ open, onClose, myName, partnerName, myConfig, partnerConfig, meta, currentDay, roomId, user, onTasksSaved, onResetToday, onSettingsSaveRedirect }) {
   const [editTasks, setEditTasks] = useState(myConfig?.tasks || []);
   const [saving, setSaving] = useState(false);
+  const [saveMsg, setSaveMsg] = useState('');
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [resetting, setResetting] = useState(false);
 
+  // Determine if tasks are locked (challenge has started)
+  const tasksLocked = meta && computeCurrentDay(meta.start_date) >= 1;
+
   useEffect(() => {
     if (myConfig) setEditTasks([...myConfig.tasks]);
+    setSaveMsg('');
   }, [myConfig, open]);
 
   const handleSaveTasks = async () => {
-    if (editTasks.some((t) => !t.trim()) || saving) return;
+    if (editTasks.some((t) => !t.trim()) || saving || tasksLocked) return;
     setSaving(true);
     const trimmed = editTasks.map((t) => t.trim());
-    const { error } = await supabase.from('challenge_config').update({ tasks: trimmed }).eq('user_name', myName);
-    if (!error) onTasksSaved(trimmed);
+    const { error } = await supabase
+      .from('challenge_config')
+      .update({ tasks: trimmed })
+      .eq('room_id', roomId)
+      .eq('user_id', user.id);
+    if (!error) {
+      onTasksSaved(trimmed);
+      setSaveMsg('Changes saved');
+      setTimeout(() => {
+        onSettingsSaveRedirect();
+      }, 1500);
+    }
     setSaving(false);
   };
 
   const handleResetToday = async () => {
     if (resetting) return;
     setResetting(true);
-    const { error } = await supabase.from('challenge_logs').delete().eq('user_name', myName).eq('day', currentDay);
+    const { error } = await supabase
+      .from('challenge_logs')
+      .delete()
+      .eq('room_id', roomId)
+      .eq('user_id', user.id)
+      .eq('day', currentDay);
     if (!error) onResetToday();
     setResetting(false);
     setShowResetConfirm(false);
   };
 
-  const handleNotMe = () => {
-    localStorage.removeItem(LS_KEY);
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+  };
+
+  const handleBackToDashboard = () => {
+    window.location.hash = '';
     window.location.reload();
   };
 
@@ -704,28 +866,47 @@ function SettingsPanel({ open, onClose, myName, partnerName, myConfig, partnerCo
             <button onClick={onClose} className="text-text-muted hover:text-text-primary text-2xl leading-none transition-colors">×</button>
           </div>
 
-          {/* Edit tasks */}
+          {/* Tasks section */}
           <div className="mb-8">
-            <p className="font-syne text-text-muted text-[0.65rem] uppercase tracking-[0.15em] mb-3">Edit your tasks</p>
-            <div className="space-y-2">
-              {editTasks.map((t, i) => (
-                <div key={i} className="flex items-center gap-2">
-                  <span className="font-mono text-text-muted text-xs w-5 text-right">{String(i + 1).padStart(2, '0')}</span>
-                  <input
-                    type="text" maxLength={60} value={t}
-                    onChange={(e) => { const c = [...editTasks]; c[i] = e.target.value; setEditTasks(c); }}
-                    className="flex-1 bg-surface border border-border-muted text-text-primary font-syne text-sm px-3 py-2 rounded-[4px] focus:border-amber transition-colors"
-                  />
+            <p className="font-syne text-text-muted text-[0.65rem] uppercase tracking-[0.15em] mb-3">
+              {tasksLocked ? 'Your tasks' : 'Edit your tasks'}
+            </p>
+            {tasksLocked ? (
+              <>
+                <div className="space-y-1">
+                  {(myConfig?.tasks || []).map((t, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <span className="font-mono text-text-muted text-xs w-5 text-right">{String(i + 1).padStart(2, '0')}</span>
+                      <span className="font-mono text-text-primary text-sm">{t}</span>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-            <button
-              onClick={handleSaveTasks}
-              disabled={editTasks.some((t) => !t.trim()) || saving}
-              className="mt-3 font-syne text-amber text-sm font-semibold disabled:opacity-40 hover:opacity-80 transition-opacity"
-            >
-              {saving ? 'Saving...' : 'Save changes'}
-            </button>
+                <p className="font-mono text-text-muted text-xs mt-2">Tasks locked — challenge in progress</p>
+              </>
+            ) : (
+              <>
+                <div className="space-y-2">
+                  {editTasks.map((t, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <span className="font-mono text-text-muted text-xs w-5 text-right">{String(i + 1).padStart(2, '0')}</span>
+                      <input
+                        type="text" maxLength={60} value={t}
+                        onChange={(e) => { const c = [...editTasks]; c[i] = e.target.value; setEditTasks(c); }}
+                        className="flex-1 bg-surface border border-border-muted text-text-primary font-syne text-sm px-3 py-2 rounded-[4px] focus:border-amber transition-colors"
+                      />
+                    </div>
+                  ))}
+                </div>
+                {saveMsg && <p className="font-mono text-amber text-xs mt-2 animate-fade-in">{saveMsg}</p>}
+                <button
+                  onClick={handleSaveTasks}
+                  disabled={editTasks.some((t) => !t.trim()) || saving}
+                  className="mt-3 font-syne text-amber text-sm font-semibold disabled:opacity-40 hover:opacity-80 transition-opacity"
+                >
+                  {saving ? 'Saving...' : 'Save changes'}
+                </button>
+              </>
+            )}
           </div>
 
           {/* Partner tasks */}
@@ -761,6 +942,7 @@ function SettingsPanel({ open, onClose, myName, partnerName, myConfig, partnerCo
           <div className="mb-8">
             <p className="font-syne text-text-muted text-[0.65rem] uppercase tracking-[0.15em] mb-3">Challenge info</p>
             <div className="space-y-1 font-mono text-text-primary text-sm">
+              <p>Room: {roomId}</p>
               <p>Start: {formatDate(meta.start_date)}</p>
               <p>Duration: {meta.duration_days} days</p>
               <p>Current day: {Math.min(Math.max(currentDay, 1), meta.duration_days)}</p>
@@ -768,10 +950,15 @@ function SettingsPanel({ open, onClose, myName, partnerName, myConfig, partnerCo
             </div>
           </div>
 
-          {/* Not me */}
-          <button onClick={handleNotMe} className="font-mono text-text-muted text-sm hover:text-text-primary transition-colors underline">
-            That&apos;s not me
-          </button>
+          {/* Navigation */}
+          <div className="space-y-3">
+            <button onClick={handleBackToDashboard} className="font-mono text-text-muted text-sm hover:text-text-primary transition-colors underline block">
+              ← Back to dashboard
+            </button>
+            <button onClick={handleSignOut} className="font-mono text-text-muted text-sm hover:text-text-primary transition-colors underline block">
+              Sign out
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -779,11 +966,11 @@ function SettingsPanel({ open, onClose, myName, partnerName, myConfig, partnerCo
 }
 
 // ============================================================
-// MAIN APP COMPONENT
+// ROOM VIEW (main challenge experience for a single room)
 // ============================================================
-export default function App() {
+function RoomView({ user, roomId }) {
   // --- App state ---
-  const [screen, setScreen] = useState('loading'); // loading | onboarding | waiting | pathC | app | error
+  const [screen, setScreen] = useState('loading'); // loading | onboarding | waiting | app | error
   const [meta, setMeta] = useState(null);
   const [configs, setConfigs] = useState([]);
   const [logs, setLogs] = useState([]);
@@ -796,13 +983,22 @@ export default function App() {
   const subscriptionRef = useRef(null);
 
   // --- Derived values ---
-  const partnerName = useMemo(() => {
-    if (!meta || !myName) return '';
-    return meta.user_a_name === myName ? meta.user_b_name : meta.user_a_name;
-  }, [meta, myName]);
+  const myUserId = user.id;
 
-  const myConfig = useMemo(() => configs.find((c) => c.user_name === myName), [configs, myName]);
-  const partnerConfig = useMemo(() => configs.find((c) => c.user_name === partnerName), [configs, partnerName]);
+  const partnerName = useMemo(() => {
+    if (!meta || !myUserId) return '';
+    if (meta.user_a_id === myUserId) return meta.user_b_name || '';
+    return meta.user_a_name || '';
+  }, [meta, myUserId]);
+
+  const partnerId = useMemo(() => {
+    if (!meta || !myUserId) return null;
+    if (meta.user_a_id === myUserId) return meta.user_b_id;
+    return meta.user_a_id;
+  }, [meta, myUserId]);
+
+  const myConfig = useMemo(() => configs.find((c) => c.user_id === myUserId), [configs, myUserId]);
+  const partnerConfig = useMemo(() => configs.find((c) => c.user_id === partnerId), [configs, partnerId]);
 
   const currentDay = useMemo(() => {
     if (!meta) return 0;
@@ -818,24 +1014,23 @@ export default function App() {
 
   // My logs for today
   const myTodayLogs = useMemo(() => {
-    return logs.filter((l) => l.user_name === myName && l.day === clampedDay);
-  }, [logs, myName, clampedDay]);
+    return logs.filter((l) => l.user_id === myUserId && l.day === clampedDay);
+  }, [logs, myUserId, clampedDay]);
 
   const partnerTodayLogs = useMemo(() => {
-    return logs.filter((l) => l.user_name === partnerName && l.day === clampedDay);
-  }, [logs, partnerName, clampedDay]);
+    return logs.filter((l) => l.user_id === partnerId && l.day === clampedDay);
+  }, [logs, partnerId, clampedDay]);
 
   const myTodayCount = myTodayLogs.filter((l) => l.completed).length;
   const partnerTodayCount = partnerTodayLogs.filter((l) => l.completed).length;
 
   // Streaks & stats
-  const computeStats = useCallback((userName, taskCount) => {
+  const computeStats = useCallback((userId, taskCount) => {
     if (!taskCount || !meta) return { streak: 0, perfectDays: 0, totalCompleted: 0, completionPct: 0, daysSinceLastComplete: 0, bestStreak: 0 };
-    const userLogs = logs.filter((l) => l.user_name === userName && l.completed);
+    const userLogs = logs.filter((l) => l.user_id === userId && l.completed);
     const totalCompleted = userLogs.length;
     const completionPct = daysElapsed > 0 ? Math.round((totalCompleted / (taskCount * daysElapsed)) * 100) : 0;
 
-    // Perfect days
     let perfectDays = 0;
     const dayLimit = Math.min(currentDay, durationDays);
     for (let d = 1; d <= dayLimit; d++) {
@@ -843,7 +1038,6 @@ export default function App() {
       if (dayCompleted >= taskCount) perfectDays++;
     }
 
-    // Current streak (consecutive perfect days ending on today or yesterday)
     let streak = 0;
     for (let d = dayLimit; d >= 1; d--) {
       const dayCompleted = userLogs.filter((l) => l.day === d).length;
@@ -851,7 +1045,6 @@ export default function App() {
       else break;
     }
 
-    // Best streak
     let bestStreak = 0;
     let currentStrk = 0;
     for (let d = 1; d <= dayLimit; d++) {
@@ -860,11 +1053,10 @@ export default function App() {
       else currentStrk = 0;
     }
 
-    // Days since last complete (before today)
     let daysSinceLastComplete = 0;
     if (dayLimit > 1) {
       for (let d = dayLimit - 1; d >= 1; d--) {
-        const dayTotal = logs.filter((l) => l.user_name === userName && l.day === d).length;
+        const dayTotal = logs.filter((l) => l.user_id === userId && l.day === d).length;
         const dayCompleted = userLogs.filter((l) => l.day === d).length;
         if (dayCompleted === 0 && dayTotal === 0) daysSinceLastComplete++;
         else break;
@@ -874,8 +1066,8 @@ export default function App() {
     return { streak, perfectDays, totalCompleted, completionPct: Math.min(completionPct, 100), daysSinceLastComplete, bestStreak };
   }, [logs, meta, currentDay, durationDays, daysElapsed]);
 
-  const myStats = useMemo(() => computeStats(myName, myTaskCount), [computeStats, myName, myTaskCount]);
-  const partnerStats = useMemo(() => computeStats(partnerName, partnerTaskCount), [computeStats, partnerName, partnerTaskCount]);
+  const myStats = useMemo(() => computeStats(myUserId, myTaskCount), [computeStats, myUserId, myTaskCount]);
+  const partnerStats = useMemo(() => computeStats(partnerId, partnerTaskCount), [computeStats, partnerId, partnerTaskCount]);
 
   // --- Nudge ---
   const nudgeMessage = useMemo(() => {
@@ -927,14 +1119,24 @@ export default function App() {
   // --- Data fetching ---
   const fetchAll = useCallback(async () => {
     try {
-      const { data: metaData, error: metaErr } = await supabase.from('challenge_meta').select('*').limit(1).maybeSingle();
+      const { data: metaData, error: metaErr } = await supabase
+        .from('challenge_meta')
+        .select('*')
+        .eq('room_id', roomId)
+        .maybeSingle();
       if (metaErr) throw metaErr;
       setMeta(metaData);
 
       if (metaData) {
-        const { data: configData } = await supabase.from('challenge_config').select('*');
+        const { data: configData } = await supabase
+          .from('challenge_config')
+          .select('*')
+          .eq('room_id', roomId);
         setConfigs(configData || []);
-        const { data: logData } = await supabase.from('challenge_logs').select('*');
+        const { data: logData } = await supabase
+          .from('challenge_logs')
+          .select('*')
+          .eq('room_id', roomId);
         setLogs(logData || []);
       }
 
@@ -944,66 +1146,56 @@ export default function App() {
       setScreen('error');
       return null;
     }
-  }, []);
+  }, [roomId]);
 
   // --- Init ---
   useEffect(() => {
     const init = async () => {
-      const storedName = localStorage.getItem(LS_KEY);
       const metaData = await fetchAll();
 
       if (!metaData) {
-        if (storedName) {
-          // Meta doesn't exist but localStorage has a name — could be stale
-          setScreen('onboarding');
-        } else {
-          setScreen('onboarding');
-        }
-        return;
-      }
-
-      if (storedName) {
-        // Verify name matches one of the users
-        if (storedName === metaData.user_a_name || storedName === metaData.user_b_name) {
-          setMyName(storedName);
-          if (!metaData.user_b_name) {
-            setScreen('waiting');
-          } else {
-            setScreen('app');
-          }
-        } else {
-          localStorage.removeItem(LS_KEY);
-          if (metaData.user_a_name && metaData.user_b_name) {
-            setScreen('pathC');
-          } else {
-            setScreen('onboarding');
-          }
-        }
-        return;
-      }
-
-      // No stored name
-      if (metaData.user_a_name && metaData.user_b_name) {
-        setScreen('pathC');
-      } else {
+        // No meta for this room — first user creates it
         setScreen('onboarding');
+        return;
       }
+
+      // Check if current user is part of this room
+      if (metaData.user_a_id === myUserId || metaData.user_b_id === myUserId) {
+        // Determine display name
+        const displayName = metaData.user_a_id === myUserId ? metaData.user_a_name : metaData.user_b_name;
+        setMyName(displayName);
+        if (!metaData.user_b_id) {
+          setScreen('waiting');
+        } else {
+          setScreen('app');
+        }
+        return;
+      }
+
+      // User is not part of this room — if second slot open, onboard
+      if (!metaData.user_b_id) {
+        setScreen('onboarding');
+        return;
+      }
+
+      // Room is full and user is not a participant
+      setScreen('error');
     };
 
     init();
-  }, [fetchAll]);
+  }, [fetchAll, myUserId]);
 
   // --- Realtime subscription ---
   useEffect(() => {
     if (screen !== 'app' && screen !== 'waiting') return;
 
     const channel = supabase
-      .channel('challenge_logs_changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'challenge_logs' }, (payload) => {
+      .channel(`challenge_logs_${roomId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'challenge_logs', filter: `room_id=eq.${roomId}` }, (payload) => {
         if (payload.eventType === 'INSERT') {
           setLogs((prev) => {
-            const exists = prev.find((l) => l.user_name === payload.new.user_name && l.day === payload.new.day && l.task_index === payload.new.task_index);
-            if (exists) return prev.map((l) => (l.user_name === payload.new.user_name && l.day === payload.new.day && l.task_index === payload.new.task_index) ? payload.new : l);
+            const exists = prev.find((l) => l.user_id === payload.new.user_id && l.day === payload.new.day && l.task_index === payload.new.task_index);
+            if (exists) return prev.map((l) => (l.user_id === payload.new.user_id && l.day === payload.new.day && l.task_index === payload.new.task_index) ? payload.new : l);
             return [...prev, payload.new];
           });
         } else if (payload.eventType === 'UPDATE') {
@@ -1021,79 +1213,83 @@ export default function App() {
         supabase.removeChannel(subscriptionRef.current);
       }
     };
-  }, [screen]);
+  }, [screen, roomId]);
 
   // --- Waiting screen poll ---
   useEffect(() => {
     if (screen !== 'waiting') return;
     const interval = setInterval(async () => {
-      const { data } = await supabase.from('challenge_meta').select('*').limit(1).maybeSingle();
-      if (data && data.user_b_name) {
+      const { data } = await supabase
+        .from('challenge_meta')
+        .select('*')
+        .eq('room_id', roomId)
+        .maybeSingle();
+      if (data && data.user_b_id) {
         setMeta(data);
-        // Refetch all
-        const { data: configData } = await supabase.from('challenge_config').select('*');
+        const { data: configData } = await supabase.from('challenge_config').select('*').eq('room_id', roomId);
         setConfigs(configData || []);
-        const { data: logData } = await supabase.from('challenge_logs').select('*');
+        const { data: logData } = await supabase.from('challenge_logs').select('*').eq('room_id', roomId);
         setLogs(logData || []);
         setScreen('app');
       }
     }, 4000);
     return () => clearInterval(interval);
-  }, [screen]);
+  }, [screen, roomId]);
 
   // --- Task toggle ---
   const toggleTask = useCallback(async (taskIndex) => {
-    const existing = logs.find((l) => l.user_name === myName && l.day === clampedDay && l.task_index === taskIndex);
+    const existing = logs.find((l) => l.user_id === myUserId && l.day === clampedDay && l.task_index === taskIndex);
     const newCompleted = existing ? !existing.completed : true;
 
     // Optimistic update
     setLogs((prev) => {
-      const idx = prev.findIndex((l) => l.user_name === myName && l.day === clampedDay && l.task_index === taskIndex);
+      const idx = prev.findIndex((l) => l.user_id === myUserId && l.day === clampedDay && l.task_index === taskIndex);
       if (idx >= 0) {
         const copy = [...prev];
         copy[idx] = { ...copy[idx], completed: newCompleted };
         return copy;
       }
-      return [...prev, { user_name: myName, day: clampedDay, task_index: taskIndex, completed: newCompleted, id: 'temp-' + Date.now() }];
+      return [...prev, { room_id: roomId, user_id: myUserId, day: clampedDay, task_index: taskIndex, completed: newCompleted, id: 'temp-' + Date.now() }];
     });
 
     await supabase.from('challenge_logs').upsert(
-      { user_name: myName, day: clampedDay, task_index: taskIndex, completed: newCompleted, updated_at: new Date().toISOString() },
-      { onConflict: 'user_name,day,task_index' }
+      { room_id: roomId, user_id: myUserId, day: clampedDay, task_index: taskIndex, completed: newCompleted, updated_at: new Date().toISOString() },
+      { onConflict: 'room_id,user_id,day,task_index' }
     );
-  }, [logs, myName, clampedDay]);
+  }, [logs, myUserId, clampedDay, roomId]);
 
   // --- Settings callbacks ---
   const handleTasksSaved = (newTasks) => {
-    setConfigs((prev) => prev.map((c) => c.user_name === myName ? { ...c, tasks: newTasks } : c));
+    setConfigs((prev) => prev.map((c) => c.user_id === myUserId ? { ...c, tasks: newTasks } : c));
   };
 
   const handleResetToday = () => {
-    setLogs((prev) => prev.filter((l) => !(l.user_name === myName && l.day === clampedDay)));
+    setLogs((prev) => prev.filter((l) => !(l.user_id === myUserId && l.day === clampedDay)));
+  };
+
+  const handleSettingsSaveRedirect = () => {
+    setSettingsOpen(false);
+    setActiveTab('today');
   };
 
   // --- Onboarding complete ---
-  const handleOnboardingComplete = async (name, destination) => {
-    setMyName(name);
+  const handleOnboardingComplete = async (displayName, destination) => {
+    setMyName(displayName);
     await fetchAll();
     if (destination === 'waiting') {
+      // Refetch to get latest meta
+      const { data: metaData } = await supabase.from('challenge_meta').select('*').eq('room_id', roomId).maybeSingle();
+      if (metaData) setMeta(metaData);
       setScreen('waiting');
     } else {
-      const { data: metaData } = await supabase.from('challenge_meta').select('*').limit(1).maybeSingle();
+      const { data: metaData } = await supabase.from('challenge_meta').select('*').eq('room_id', roomId).maybeSingle();
       if (metaData) setMeta(metaData);
-      const { data: configData } = await supabase.from('challenge_config').select('*');
+      const { data: configData } = await supabase.from('challenge_config').select('*').eq('room_id', roomId);
       setConfigs(configData || []);
-      const { data: logData } = await supabase.from('challenge_logs').select('*');
+      const { data: logData } = await supabase.from('challenge_logs').select('*').eq('room_id', roomId);
       setLogs(logData || []);
       setScreen('app');
     }
-  };
-
-  // --- Path C select ---
-  const handlePathCSelect = (name) => {
-    localStorage.setItem(LS_KEY, name);
-    setMyName(name);
-    setScreen('app');
   };
 
   // --- Grid screenshot ---
@@ -1135,52 +1331,31 @@ export default function App() {
 
   if (screen === 'loading') {
     return (
-      <>
-        <GlobalStyles />
-        <div className="flex items-center justify-center min-h-screen">
-          <p className="font-mono text-text-muted text-sm animate-pulse">Loading...</p>
-        </div>
-      </>
+      <div className="flex items-center justify-center min-h-screen">
+        <p className="font-mono text-text-muted text-sm animate-pulse">Loading...</p>
+      </div>
     );
   }
 
   if (screen === 'error') {
     return (
-      <>
-        <GlobalStyles />
-        <div className="flex flex-col items-center justify-center min-h-screen px-6">
-          <p className="font-syne text-text-primary text-lg font-semibold mb-2">Couldn&apos;t connect.</p>
-          <p className="font-mono text-text-muted text-sm">Check your internet and refresh.</p>
-        </div>
-      </>
+      <div className="flex flex-col items-center justify-center min-h-screen px-6">
+        <p className="font-syne text-text-primary text-lg font-semibold mb-2">Couldn&apos;t connect.</p>
+        <p className="font-mono text-text-muted text-sm mb-4">Check your internet and refresh.</p>
+        <button onClick={() => { window.location.hash = ''; window.location.reload(); }} className="font-mono text-amber text-sm hover:opacity-80 transition-opacity">← Back to dashboard</button>
+      </div>
     );
   }
 
   if (screen === 'onboarding') {
     return (
-      <>
-        <GlobalStyles />
-        <Onboarding meta={meta} onComplete={handleOnboardingComplete} />
-      </>
+      <Onboarding meta={meta} roomId={roomId} user={user} onComplete={handleOnboardingComplete} />
     );
   }
 
   if (screen === 'waiting') {
-    return (
-      <>
-        <GlobalStyles />
-        <WaitingScreen url={window.location.href} />
-      </>
-    );
-  }
-
-  if (screen === 'pathC') {
-    return (
-      <>
-        <GlobalStyles />
-        <PathCScreen userAName={meta.user_a_name} userBName={meta.user_b_name} onSelect={handlePathCSelect} />
-      </>
-    );
+    const inviteUrl = window.location.origin + '/#/room/' + roomId;
+    return <WaitingScreen url={inviteUrl} />;
   }
 
   // --- MAIN APP ---
@@ -1200,24 +1375,31 @@ export default function App() {
 
   return (
     <>
-      <GlobalStyles />
       <div className="min-h-screen bg-bg pb-16">
         {/* Top bar */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-          <div className="flex gap-6">
-            {['today', 'chain'].map((tab) => (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={`font-syne text-sm font-semibold pb-1 transition-colors ${
-                  activeTab === tab
-                    ? 'text-text-primary border-b-2 border-b-amber'
-                    : 'text-text-muted border-b-2 border-b-transparent'
-                }`}
-              >
-                {tab.toUpperCase()}
-              </button>
-            ))}
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => { window.location.hash = ''; window.location.reload(); }}
+              className="text-text-muted hover:text-text-primary text-sm font-mono transition-colors"
+            >
+              ←
+            </button>
+            <div className="flex gap-6">
+              {['today', 'chain'].map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => setActiveTab(tab)}
+                  className={`font-syne text-sm font-semibold pb-1 transition-colors ${
+                    activeTab === tab
+                      ? 'text-text-primary border-b-2 border-b-amber'
+                      : 'text-text-muted border-b-2 border-b-transparent'
+                  }`}
+                >
+                  {tab.toUpperCase()}
+                </button>
+              ))}
+            </div>
           </div>
           <button onClick={() => setSettingsOpen(true)} className="text-text-muted hover:text-text-primary text-lg transition-colors">⚙</button>
         </div>
@@ -1320,7 +1502,7 @@ export default function App() {
                     <p className="font-syne text-text-muted text-[0.65rem] uppercase tracking-[0.15em] mb-3">{possessive(myName)} final day</p>
                     <div className="space-y-2">
                       {myConfig.tasks.map((t, i) => {
-                        const lastDayLog = logs.find((l) => l.user_name === myName && l.day === durationDays && l.task_index === i);
+                        const lastDayLog = logs.find((l) => l.user_id === myUserId && l.day === durationDays && l.task_index === i);
                         return <TaskCard key={i} index={i} text={t} completed={lastDayLog?.completed || false} readOnly />;
                       })}
                     </div>
@@ -1420,9 +1602,82 @@ export default function App() {
         partnerConfig={partnerConfig}
         meta={meta}
         currentDay={clampedDay}
+        roomId={roomId}
+        user={user}
         onTasksSaved={handleTasksSaved}
         onResetToday={handleResetToday}
+        onSettingsSaveRedirect={handleSettingsSaveRedirect}
       />
+    </>
+  );
+}
+
+// ============================================================
+// MAIN APP COMPONENT — auth + routing
+// ============================================================
+export default function App() {
+  const [session, setSession] = useState(undefined); // undefined = loading, null = signed out
+  const [roomId, setRoomId] = useState(getRoomIdFromHash());
+
+  // Listen for auth state changes
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session: s } }) => {
+      setSession(s);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => {
+      setSession(s);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  // Listen for hash changes (back/forward)
+  useEffect(() => {
+    const onHashChange = () => setRoomId(getRoomIdFromHash());
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
+  }, []);
+
+  // Loading auth
+  if (session === undefined) {
+    return (
+      <>
+        <GlobalStyles />
+        <div className="flex items-center justify-center min-h-screen">
+          <p className="font-mono text-text-muted text-sm animate-pulse">Loading...</p>
+        </div>
+      </>
+    );
+  }
+
+  // Not signed in
+  if (!session) {
+    return (
+      <>
+        <GlobalStyles />
+        <SignInScreen />
+      </>
+    );
+  }
+
+  const user = session.user;
+
+  // No room in URL → Dashboard
+  if (!roomId) {
+    return (
+      <>
+        <GlobalStyles />
+        <Dashboard user={user} onEnterRoom={(id) => setRoomId(id)} />
+      </>
+    );
+  }
+
+  // Room view
+  return (
+    <>
+      <GlobalStyles />
+      <RoomView key={roomId} user={user} roomId={roomId} />
     </>
   );
 }
