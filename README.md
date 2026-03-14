@@ -11,7 +11,7 @@ A real-time habit accountability app for two people doing a shared daily challen
 ![Vercel](https://img.shields.io/badge/Vercel-000000?style=flat-square&logo=vercel&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-F5A623?style=flat-square)
 
-**[Live Demo](https://duo-challenge-tracker-brown.vercel.app)** · **[Report Bug](https://github.com/vaishnavi-eklaspur/Duo-Challenge-Tracker/issues)** · **[Request Feature](https://github.com/vaishnavi-eklaspur/Duo-Challenge-Tracker/issues)**
+**[Live App](https://duo-challenge-tracker-brown.vercel.app)** · **[Report Bug](https://github.com/vaishnavi-eklaspur/Duo-Challenge-Tracker/issues)** · **[Request Feature](https://github.com/vaishnavi-eklaspur/Duo-Challenge-Tracker/issues)**
 
 ---
 
@@ -21,33 +21,62 @@ Most habit apps are built for individuals. But accountability is a social contra
 
 This app puts two people in the same space, each with their own tasks and a shared timeline. A grid fills up amber as days get completed. Skipped days stay dark red. That visual tension is the whole product.
 
-Each person signs in with Google, sets their own tasks independently (1 to 10), and gets a unique invite link per challenge. One person can run multiple challenges with different friends simultaneously — all isolated.
+Each person signs in with Google, sets their own tasks independently (1 to 10), and gets a unique invite link per challenge. One person can run multiple challenges with different friends simultaneously — all completely isolated.
+
+---
+
+> ## 👤 Just here to use the app?
+>
+> **No setup. No installation. No SQL. Nothing.**
+>
+> Just open the link, sign in with Google, and start your challenge.
+>
+> ### **→ [Open the App](https://duo-challenge-tracker-brown.vercel.app)**
+>
+> ```
+> 1. Sign in with Google
+> 2. Click "Start a new challenge"
+> 3. Set your name, tasks, duration, and start date
+> 4. Copy the unique room link from the waiting screen
+> 5. Send it to your partner — they sign in and set their own tasks
+> 6. Challenge starts automatically ✦
+> ```
+>
+> That's it. Everything is already live and hosted.
+> **You can stop reading here.**
+
+---
+
+> ## 🧑‍💻 Are you a developer looking to self-host?
+>
+> You'll need your own Supabase project, Google OAuth credentials, and a Vercel account.
+> **Everything you need is in the [Self-Hosting](#-self-hosting) section below.**
 
 ---
 
 ## ✨ Features
 
 **🔐 Authentication**
-- Google OAuth via Supabase Auth — zero friction, no passwords
+- Google OAuth via Supabase Auth — one click, no passwords
 - Session-based identity throughout — no localStorage hacks
-- RLS policies ensure users only see their own data
+- RLS policies ensure users only ever see data from rooms they belong to
 
 **🏠 Dashboard**
-- Lists all active challenges the signed-in user is part of
+- Lists every active challenge the signed-in user is part of
 - Each card shows partner name, duration, current day, and completion %
-- One-click to start a new challenge room
+- One-click to create a new challenge room
 
 **🔗 Multi-Room Support**
 - Every challenge gets a unique 6-character room ID
 - URL structure: `/#/room/AbC123`
-- Share the link with your partner — they sign in and join that specific room
-- One user can run multiple challenges with different friends, all completely isolated
+- Share the link — partner signs in and joins that specific room
+- Run multiple challenges with different friends simultaneously, all isolated
 
 **✅ Daily Check-in**
 - Card-based task toggles with a left-to-right fill sweep animation
-- Optimistic UI — state updates instantly, Supabase syncs in background
-- All tasks completed → confetti burst + persistent perfect day banner
-- Partner's section updates live as they check off tasks (websocket, no polling)
+- Optimistic UI — state updates instantly, Supabase upserts in background
+- All tasks done → confetti burst + persistent perfect day banner
+- Partner's section updates live as they check off (websocket, no polling)
 
 **⛓️ The Chain**
 - GitHub contribution graph style grid across the full challenge duration
@@ -59,25 +88,25 @@ Each person signs in with Google, sets their own tasks independently (1 to 10), 
 | 🟥 Dark red | Gap day — nothing done |
 | ⬛ Empty | Future day |
 
-- Hover tooltips showing both users' daily completion
-- Animated SVG progress rings with streak and perfect day counts
+- Hover tooltips showing per-day completion for both users
+- Animated SVG progress rings with streak count and perfect day tally
 
 **🔔 Nudge System**
-- 16 priority-ordered contextual nudges computed from live state
-- Uses actual names and actual numbers — never generic copy
+- 16 priority-ordered contextual nudges computed entirely client-side from live state
+- Uses actual names and actual numbers — never generic motivational copy
 - Time-aware, partner-aware, streak-aware, gap-aware, milestone-aware
 
 > *"Priya finished all 5 today. You haven't started."*
 
 **⚙️ Settings**
-- Tasks are editable during onboarding only — locked permanently once the challenge starts
+- Tasks editable during onboarding only — locked permanently once the challenge start date is reached
 - View partner's tasks (read-only)
 - Reset today's check-ins
 - Sign out
 
 **🏁 End Screen**
-- Final stats for both users with personalised closing copy
-- One-click PNG export of the completed chain grid
+- Final stats for both users with personalised closing copy based on completion rate
+- One-click PNG export of the completed chain grid via html2canvas
 
 ---
 
@@ -91,7 +120,7 @@ Every design decision has a behavioral reason.
 | **Loss Aversion** | Gap days are dark red by design. The amber chain pulls you forward |
 | **Social Accountability** | Seeing your partner's real-time progress creates pressure without punishment |
 | **Identity Reinforcement** | Nudges say *"You're ahead"* not *"Great job"* — identity language, not cheerleading |
-| **Progress Framing** | Stats show what you did — never *"you missed X days"* |
+| **Progress Framing** | Stats always show what you did — never *"you missed X days"* |
 | **Zeigarnik Effect** | An incomplete grid creates cognitive tension that motivates completion |
 
 ---
@@ -102,12 +131,12 @@ Every design decision has a behavioral reason.
 |---|---|---|
 | Frontend | React 18 + Vite | Fast builds, single-file component architecture |
 | Styling | Tailwind CSS | Utility-first, zero custom CSS files |
-| Auth | Supabase Auth (Google OAuth) | Zero-friction sign in, session management out of the box |
-| Database | Supabase Postgres | Managed Postgres with RLS, upsert-safe unique constraints |
-| Realtime | Supabase Realtime | Websocket subscription — instant partner updates, no polling |
-| Deployment | Vercel | Zero-config Vite detection, instant deploys on every push |
+| Auth | Supabase Auth + Google OAuth | One-click sign in, session management, RLS integration |
+| Database | Supabase Postgres | Managed Postgres with RLS, upsert-safe composite unique constraints |
+| Realtime | Supabase Realtime | Websocket subscription per room — instant partner updates, no polling |
+| Deployment | Vercel | Zero-config Vite detection, auto-deploys on every push to main |
 | Animations | CSS keyframes + canvas-confetti | No animation library overhead |
-| Export | html2canvas | Client-side PNG grid export, no backend needed |
+| Export | html2canvas | Client-side PNG export, no backend needed |
 
 > No external UI library. No routing library. Screen state via `useState`. All business logic computed client-side from Supabase data.
 
@@ -128,13 +157,13 @@ challenge_logs     -- one row per (room × user × day × task)
                    -- UNIQUE (room_id, user_id, day, task_index) → safe upserts
 ```
 
-RLS is enabled on all three tables — users can only read and write rows in rooms they belong to.
+RLS is enabled on all three tables. Users can only read and write rows in rooms they belong to — enforced at the database level, not just the application layer.
 
 ---
 
-## 🏁 Getting Started
+## 🧑‍💻 Self-Hosting
 
-**Prerequisites:** Node.js 18+, a free [Supabase](https://supabase.com) account
+**Prerequisites:** Node.js 18+, a free [Supabase](https://supabase.com) account, a [Vercel](https://vercel.com) account
 
 **1. Clone and install**
 
@@ -237,9 +266,9 @@ Database → Replication → find `challenge_logs` → toggle Realtime ON
 
 - Supabase → Authentication → Providers → Google → enable
 - Create OAuth credentials in [Google Cloud Console](https://console.cloud.google.com)
-- Add Supabase callback URL as an authorised redirect URI
-- Paste Client ID and Client Secret back into Supabase
-- Set Site URL in Supabase → Authentication → URL Configuration to your Vercel URL
+- Add the Supabase callback URL as an authorised redirect URI in Google
+- Paste Client ID and Secret back into Supabase
+- Set Site URL in Supabase → Authentication → URL Configuration to your deployed domain
 
 **6. Environment variables**
 
@@ -252,34 +281,19 @@ VITE_SUPABASE_URL=https://your-project-id.supabase.co
 VITE_SUPABASE_ANON_KEY=your-anon-key-here
 ```
 
-**7. Run**
+**7. Run locally**
 
 ```bash
 npm run dev
 # → http://localhost:5173
 ```
 
----
-
-## 🚢 Deploying to Vercel
+**8. Deploy**
 
 ```bash
 # Push to GitHub → Vercel → New Project → import repo
 # Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY as environment variables
-# Deploy — every subsequent push to main auto-deploys
-```
-
----
-
-## 🤝 Starting a challenge with a partner
-
-```
-1. Sign in with Google at your Vercel URL
-2. Click "Start a new challenge" from the dashboard
-3. Complete onboarding — display name, tasks (1–10), duration, start date
-4. Copy the unique room URL from the waiting screen
-5. Send to partner → they sign in and set their own tasks
-6. Challenge starts automatically ✦
+# Deploy — every push to main triggers an automatic redeploy
 ```
 
 ---
@@ -302,18 +316,30 @@ Duo-Challenge-Tracker/
 
 ## 🗺️ Roadmap
 
+**Completed**
 - [x] Core challenge flow — onboarding, daily check-ins, real-time sync
 - [x] Chain grid, progress rings, 16-condition nudge system
 - [x] Google OAuth via Supabase Auth
 - [x] Multi-room support — unique invite links per challenge
 - [x] Dashboard listing all active challenges
 - [x] Immutable tasks after challenge start date
-- [x] Settings redirect after save
-- [x] RLS policies on all tables
+- [x] RLS policies enforced at the database level
 - [x] End screen with PNG export
-- [ ] End-of-day push notifications
-- [ ] Weekly summary view
-- [ ] Mobile app (React Native, same Supabase backend)
+
+**Coming next**
+- [ ] End-of-day push notifications when tasks are incomplete
+- [ ] Weekly summary card — auto-generated, shareable as image
+- [ ] Mobile-first responsive redesign
+
+**Future scope**
+- [ ] Supabase Migrations — version-controlled schema, one command replaces all manual SQL setup
+- [ ] Streak freeze days — one intentional skip per week that doesn't break the chain
+- [ ] In-app reactions — tap 🔥 or 👀 on your partner's completed day
+- [ ] Challenge templates — pre-built task sets like "DSA grind" or "Morning routine"
+- [ ] Challenge history — archived past challenges with final stats on the dashboard
+- [ ] Multi-person rooms — accountability groups of 3 to 5
+- [ ] Public challenge profiles — shareable proof-of-work page for completed chains
+- [ ] React Native mobile app — same Supabase backend, native mobile experience
 
 ---
 
