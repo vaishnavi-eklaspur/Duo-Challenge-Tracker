@@ -14,16 +14,19 @@ const db = new PostgrestClient(
   { headers: { Authorization: 'Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6ImR1by0xIn0.eyJpc3MiOiJkdW8tY2hhbGxlbmdlLXRyYWNrZXIiLCJyb2xlIjoiYXV0aGVudGljYXRlZCIsInN1YiI6ImFub24iLCJpYXQiOjE3ODQzNjc1OTQsImV4cCI6MjA5OTcyNzU5NH0.Nl0cESNl4LxpJm1cH89RhMnRS4wvk5lBM2JwjiG1tdDIjSGPWoL0F6HK5KBdmgycyJ6yAZ6vvDWPbOG4kpztucD_V-XE-ukPczf2mduaAGeTTWe716foc5A-unXq5BXUm4GLxVZ7XI3YcXX7TWhoEfx3exPj_HikHFaOhYYNRpTecSyk67yJXygogGib57bUqrW-WipbeJhYDiBTSbxMcCqrxNfMvC0a-JLalsH-LNz9UFMy33bIhKr7ztFo8q6pKZISXbGn5-AKgBWXvfbkdJBIAUK-MxZeQDA7fxy5NuLu-BDc8Bxuqtcb71tepahRXoMKrwFTdVOgIOtYbf70oA' } }
 );
 
-// Per-browser identity — no accounts.
-// ponytail: switching devices makes you a stranger to your own challenge;
-// add real auth if that bites.
-function getUserId() {
-  let id = localStorage.getItem('duo_user_id');
-  if (!id) {
-    id = crypto.randomUUID();
-    localStorage.setItem('duo_user_id', id);
-  }
-  return id;
+// Identity: "Sign in with Google" (GIS browser SDK, no auth server).
+// The stable Google account id (`sub`) is the user id, so the same person is
+// recognized on every device. Public client id, safe to ship.
+const GOOGLE_CLIENT_ID = 'PASTE_GOOGLE_CLIENT_ID.apps.googleusercontent.com';
+
+function loadIdentity() {
+  try { return JSON.parse(localStorage.getItem('duo_identity')); } catch { return null; }
+}
+
+function signOut() {
+  localStorage.removeItem('duo_identity');
+  window.location.hash = '';
+  window.location.reload();
 }
 
 // ============================================================
@@ -78,6 +81,46 @@ function setHashRoute(roomId) {
 }
 
 // ============================================================
+// SIGN-IN SCREEN (Google Identity Services)
+// ============================================================
+function SignInScreen({ onSignIn }) {
+  const btnRef = useRef(null);
+
+  useEffect(() => {
+    // GIS script loads async; poll until it's there, then render the button
+    const t = setInterval(() => {
+      if (!window.google?.accounts?.id) return;
+      clearInterval(t);
+      window.google.accounts.id.initialize({
+        client_id: GOOGLE_CLIENT_ID,
+        callback: ({ credential }) => {
+          // ponytail: client-side decode of Google's ID token, no server-side
+          // verification — there is no server. Identity is for convenience,
+          // not access control; DB writes are open either way.
+          const b64 = credential.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+          const payload = JSON.parse(atob(b64));
+          const identity = { id: 'g-' + payload.sub, name: payload.given_name || payload.name || '' };
+          localStorage.setItem('duo_identity', JSON.stringify(identity));
+          onSignIn(identity);
+        },
+      });
+      window.google.accounts.id.renderButton(btnRef.current, {
+        theme: 'filled_black', size: 'large', text: 'continue_with', shape: 'rectangular',
+      });
+    }, 100);
+    return () => clearInterval(t);
+  }, [onSignIn]);
+
+  return (
+    <div className="flex flex-col items-center justify-center min-h-screen px-6 animate-fade-in">
+      <h1 className="font-syne text-text-primary text-3xl font-extrabold mb-2">Duo Challenge Tracker</h1>
+      <p className="font-mono text-text-muted text-sm mb-10">Sign in to start or join a challenge.</p>
+      <div ref={btnRef} />
+    </div>
+  );
+}
+
+// ============================================================
 // DASHBOARD SCREEN (multi-room)
 // ============================================================
 function Dashboard({ user, onEnterRoom }) {
@@ -120,6 +163,7 @@ function Dashboard({ user, onEnterRoom }) {
     <div className="min-h-screen bg-bg">
       <div className="flex items-center justify-between px-4 py-3 border-b border-border">
         <h1 className="font-syne text-text-primary text-lg font-extrabold">Your Challenges</h1>
+        <button onClick={signOut} className="font-mono text-text-muted text-xs hover:text-text-primary transition-colors">Sign out</button>
       </div>
       <div className="max-w-xl mx-auto px-4 py-6 animate-fade-in">
         {loading ? (
@@ -868,6 +912,9 @@ function SettingsPanel({ open, onClose, myName, partnerName, myConfig, partnerCo
             <button onClick={handleBackToDashboard} className="font-mono text-text-muted text-sm hover:text-text-primary transition-colors underline block">
               ← Back to dashboard
             </button>
+            <button onClick={signOut} className="font-mono text-text-muted text-sm hover:text-text-primary transition-colors underline block">
+              Sign out
+            </button>
           </div>
         </div>
       </div>
@@ -1498,6 +1545,7 @@ function RoomView({ user, roomId }) {
 // MAIN APP COMPONENT — auth + routing
 // ============================================================
 export default function App() {
+  const [identity, setIdentity] = useState(loadIdentity);
   const [roomId, setRoomId] = useState(getRoomIdFromHash());
 
   // Listen for hash changes (back/forward)
@@ -1507,7 +1555,9 @@ export default function App() {
     return () => window.removeEventListener('hashchange', onHashChange);
   }, []);
 
-  const user = { id: getUserId() };
+  if (!identity) return <SignInScreen onSignIn={setIdentity} />;
+
+  const user = { id: identity.id };
 
   // No room in URL → Dashboard
   if (!roomId) return <Dashboard user={user} onEnterRoom={(id) => setRoomId(id)} />;
