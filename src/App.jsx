@@ -4,12 +4,28 @@ import confetti from 'canvas-confetti';
 import html2canvas from 'html2canvas';
 
 // ============================================================
-// SUPABASE CLIENT
+// DATABASE CLIENT (Neon Data API — PostgREST-compatible, so
+// supabase-js works as the query client unchanged)
 // ============================================================
-const supabase = createClient(
-  import.meta.env.VITE_SUPABASE_URL,
-  import.meta.env.VITE_SUPABASE_ANON_KEY
+// ponytail: the key is a static public JWT (same model as a Supabase anon
+// key, verified against /jwks.json on this site). No per-user auth — anyone
+// with the app can write. Add real auth if griefing ever matters.
+const db = createClient(
+  'https://ep-autumn-sun-af5lfcfl.apirest.c-2.us-west-2.aws.neon.tech/neondb',
+  'eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6ImR1by0xIn0.eyJpc3MiOiJkdW8tY2hhbGxlbmdlLXRyYWNrZXIiLCJyb2xlIjoiYXV0aGVudGljYXRlZCIsInN1YiI6ImFub24iLCJpYXQiOjE3ODQzNjc1OTQsImV4cCI6MjA5OTcyNzU5NH0.Nl0cESNl4LxpJm1cH89RhMnRS4wvk5lBM2JwjiG1tdDIjSGPWoL0F6HK5KBdmgycyJ6yAZ6vvDWPbOG4kpztucD_V-XE-ukPczf2mduaAGeTTWe716foc5A-unXq5BXUm4GLxVZ7XI3YcXX7TWhoEfx3exPj_HikHFaOhYYNRpTecSyk67yJXygogGib57bUqrW-WipbeJhYDiBTSbxMcCqrxNfMvC0a-JLalsH-LNz9UFMy33bIhKr7ztFo8q6pKZISXbGn5-AKgBWXvfbkdJBIAUK-MxZeQDA7fxy5NuLu-BDc8Bxuqtcb71tepahRXoMKrwFTdVOgIOtYbf70oA'
 );
+
+// Per-browser identity — no accounts.
+// ponytail: switching devices makes you a stranger to your own challenge;
+// add real auth if that bites.
+function getUserId() {
+  let id = localStorage.getItem('duo_user_id');
+  if (!id) {
+    id = crypto.randomUUID();
+    localStorage.setItem('duo_user_id', id);
+  }
+  return id;
+}
 
 // ============================================================
 // HELPERS
@@ -63,37 +79,6 @@ function setHashRoute(roomId) {
 }
 
 // ============================================================
-// SIGN-IN SCREEN
-// ============================================================
-function SignInScreen() {
-  const [loading, setLoading] = useState(false);
-
-  const handleGoogleSignIn = async () => {
-    setLoading(true);
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: { redirectTo:'https://duo-challenge-tracker-brown.vercel.app'},
-    });
-    if (error) { console.error(error); setLoading(false); }
-  };
-
-  return (
-    <div className="flex flex-col items-center justify-center min-h-screen px-6 animate-fade-in">
-      <h1 className="font-syne text-text-primary text-3xl font-extrabold mb-2">Duo Challenge Tracker</h1>
-      <p className="font-mono text-text-muted text-sm mb-10">Sign in to start or join a challenge.</p>
-      <button
-        onClick={handleGoogleSignIn}
-        disabled={loading}
-        className="flex items-center gap-3 bg-surface border border-border-muted text-text-primary font-syne font-semibold px-8 py-4 rounded-[4px] hover:border-amber transition-colors disabled:opacity-50"
-      >
-        <svg width="20" height="20" viewBox="0 0 48 48"><path fill="#4285F4" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#34A853" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59a14.5 14.5 0 0 1 0-9.18l-7.98-6.19a24.01 24.01 0 0 0 0 21.56l7.98-6.19z"/><path fill="#EA4335" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
-        {loading ? 'Signing in...' : 'Continue with Google'}
-      </button>
-    </div>
-  );
-}
-
-// ============================================================
 // DASHBOARD SCREEN (multi-room)
 // ============================================================
 function Dashboard({ user, onEnterRoom }) {
@@ -103,7 +88,7 @@ function Dashboard({ user, onEnterRoom }) {
 
   useEffect(() => {
     const fetchRooms = async () => {
-      const { data, error } = await supabase
+      const { data, error } = await db
         .from('challenge_meta')
         .select('*')
         .or(`user_a_id.eq.${user.id},user_b_id.eq.${user.id}`);
@@ -121,10 +106,6 @@ function Dashboard({ user, onEnterRoom }) {
     onEnterRoom(roomId);
   };
 
-  const handleSignOut = async () => {
-    await supabase.auth.signOut();
-  };
-
   const getPartnerName = (room) => {
     if (room.user_a_id === user.id) return room.user_b_name || 'Waiting for partner';
     return room.user_a_name;
@@ -140,7 +121,6 @@ function Dashboard({ user, onEnterRoom }) {
     <div className="min-h-screen bg-bg">
       <div className="flex items-center justify-between px-4 py-3 border-b border-border">
         <h1 className="font-syne text-text-primary text-lg font-extrabold">Your Challenges</h1>
-        <button onClick={handleSignOut} className="font-mono text-text-muted text-xs hover:text-text-primary transition-colors">Sign out</button>
       </div>
       <div className="max-w-xl mx-auto px-4 py-6 animate-fade-in">
         {loading ? (
@@ -432,7 +412,7 @@ function Onboarding({ meta, roomId, user, onComplete }) {
     const trimmedName = name.trim();
     const trimmedTasks = tasks.map((t) => t.trim());
     try {
-      const { error: metaErr } = await supabase.from('challenge_meta').insert({
+      const { error: metaErr } = await db.from('challenge_meta').insert({
         room_id: roomId,
         user_a_id: user.id,
         user_a_name: trimmedName,
@@ -442,7 +422,7 @@ function Onboarding({ meta, roomId, user, onComplete }) {
         duration_days: duration,
       });
       if (metaErr) throw metaErr;
-      const { error: configErr } = await supabase.from('challenge_config').insert({
+      const { error: configErr } = await db.from('challenge_config').insert({
         room_id: roomId,
         user_id: user.id,
         user_name: trimmedName,
@@ -463,12 +443,12 @@ function Onboarding({ meta, roomId, user, onComplete }) {
     const trimmedName = name.trim();
     const trimmedTasks = tasks.map((t) => t.trim());
     try {
-      const { error: metaErr } = await supabase.from('challenge_meta').update({
+      const { error: metaErr } = await db.from('challenge_meta').update({
         user_b_id: user.id,
         user_b_name: trimmedName,
       }).eq('id', meta.id);
       if (metaErr) throw metaErr;
-      const { error: configErr } = await supabase.from('challenge_config').insert({
+      const { error: configErr } = await db.from('challenge_config').insert({
         room_id: roomId,
         user_id: user.id,
         user_name: trimmedName,
@@ -745,7 +725,7 @@ function SettingsPanel({ open, onClose, myName, partnerName, myConfig, partnerCo
     if (editTasks.some((t) => !t.trim()) || saving || tasksLocked) return;
     setSaving(true);
     const trimmed = editTasks.map((t) => t.trim());
-    const { error } = await supabase
+    const { error } = await db
       .from('challenge_config')
       .update({ tasks: trimmed })
       .eq('room_id', roomId)
@@ -763,7 +743,7 @@ function SettingsPanel({ open, onClose, myName, partnerName, myConfig, partnerCo
   const handleResetToday = async () => {
     if (resetting) return;
     setResetting(true);
-    const { error } = await supabase
+    const { error } = await db
       .from('challenge_logs')
       .delete()
       .eq('room_id', roomId)
@@ -772,10 +752,6 @@ function SettingsPanel({ open, onClose, myName, partnerName, myConfig, partnerCo
     if (!error) onResetToday();
     setResetting(false);
     setShowResetConfirm(false);
-  };
-
-  const handleSignOut = async () => {
-    await supabase.auth.signOut();
   };
 
   const handleBackToDashboard = () => {
@@ -885,9 +861,6 @@ function SettingsPanel({ open, onClose, myName, partnerName, myConfig, partnerCo
           <div className="space-y-3">
             <button onClick={handleBackToDashboard} className="font-mono text-text-muted text-sm hover:text-text-primary transition-colors underline block">
               ← Back to dashboard
-            </button>
-            <button onClick={handleSignOut} className="font-mono text-text-muted text-sm hover:text-text-primary transition-colors underline block">
-              Sign out
             </button>
           </div>
         </div>
@@ -1048,7 +1021,7 @@ function RoomView({ user, roomId }) {
   // --- Data fetching ---
   const fetchAll = useCallback(async () => {
     try {
-      const { data: metaData, error: metaErr } = await supabase
+      const { data: metaData, error: metaErr } = await db
         .from('challenge_meta')
         .select('*')
         .eq('room_id', roomId)
@@ -1057,12 +1030,12 @@ function RoomView({ user, roomId }) {
       setMeta(metaData);
 
       if (metaData) {
-        const { data: configData } = await supabase
+        const { data: configData } = await db
           .from('challenge_config')
           .select('*')
           .eq('room_id', roomId);
         setConfigs(configData || []);
-        const { data: logData } = await supabase
+        const { data: logData } = await db
           .from('challenge_logs')
           .select('*')
           .eq('room_id', roomId);
@@ -1114,46 +1087,34 @@ function RoomView({ user, roomId }) {
     init();
   }, [fetchAll, myUserId]);
 
-  // --- Realtime subscription ---
+  // --- Partner sync ---
+  // ponytail: 4s polling instead of websockets — two users, tiny payloads.
+  // Move to a realtime channel if it ever feels slow.
+  const lastToggleRef = useRef(0);
   useEffect(() => {
-    if (screen !== 'app' && screen !== 'waiting') return;
-
-    const channel = supabase
-      .channel(`challenge_logs_${roomId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'challenge_logs', filter: `room_id=eq.${roomId}` }, (payload) => {
-        if (payload.eventType === 'INSERT') {
-          setLogs((prev) => {
-            const exists = prev.find((l) => l.user_id === payload.new.user_id && l.day === payload.new.day && l.task_index === payload.new.task_index);
-            if (exists) return prev.map((l) => (l.user_id === payload.new.user_id && l.day === payload.new.day && l.task_index === payload.new.task_index) ? payload.new : l);
-            return [...prev, payload.new];
-          });
-        } else if (payload.eventType === 'UPDATE') {
-          setLogs((prev) => prev.map((l) => l.id === payload.new.id ? payload.new : l));
-        } else if (payload.eventType === 'DELETE') {
-          setLogs((prev) => prev.filter((l) => l.id !== payload.old.id));
-        }
-      })
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [screen, roomId]);
+    if (screen !== 'app') return;
+    const interval = setInterval(() => {
+      // Skip polls right after a toggle so the optimistic update isn't clobbered
+      if (Date.now() - lastToggleRef.current < 3000) return;
+      fetchAll();
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [screen, fetchAll]);
 
   // --- Waiting screen poll ---
   useEffect(() => {
     if (screen !== 'waiting') return;
     const interval = setInterval(async () => {
-      const { data } = await supabase
+      const { data } = await db
         .from('challenge_meta')
         .select('*')
         .eq('room_id', roomId)
         .maybeSingle();
       if (data && data.user_b_id) {
         setMeta(data);
-        const { data: configData } = await supabase.from('challenge_config').select('*').eq('room_id', roomId);
+        const { data: configData } = await db.from('challenge_config').select('*').eq('room_id', roomId);
         setConfigs(configData || []);
-        const { data: logData } = await supabase.from('challenge_logs').select('*').eq('room_id', roomId);
+        const { data: logData } = await db.from('challenge_logs').select('*').eq('room_id', roomId);
         setLogs(logData || []);
         setScreen('app');
       }
@@ -1163,6 +1124,7 @@ function RoomView({ user, roomId }) {
 
   // --- Task toggle ---
   const toggleTask = useCallback(async (taskIndex) => {
+    lastToggleRef.current = Date.now();
     const existing = logs.find((l) => l.user_id === myUserId && l.day === clampedDay && l.task_index === taskIndex);
     const newCompleted = existing ? !existing.completed : true;
 
@@ -1177,7 +1139,7 @@ function RoomView({ user, roomId }) {
       return [...prev, { room_id: roomId, user_id: myUserId, day: clampedDay, task_index: taskIndex, completed: newCompleted, id: 'temp-' + Date.now() }];
     });
 
-    await supabase.from('challenge_logs').upsert(
+    await db.from('challenge_logs').upsert(
       { room_id: roomId, user_id: myUserId, day: clampedDay, task_index: taskIndex, completed: newCompleted, updated_at: new Date().toISOString() },
       { onConflict: 'room_id,user_id,day,task_index' }
     );
@@ -1528,21 +1490,7 @@ function RoomView({ user, roomId }) {
 // MAIN APP COMPONENT — auth + routing
 // ============================================================
 export default function App() {
-  const [session, setSession] = useState(undefined); // undefined = loading, null = signed out
   const [roomId, setRoomId] = useState(getRoomIdFromHash());
-
-  // Listen for auth state changes
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session: s } }) => {
-      setSession(s);
-    });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => {
-      setSession(s);
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
 
   // Listen for hash changes (back/forward)
   useEffect(() => {
@@ -1551,19 +1499,7 @@ export default function App() {
     return () => window.removeEventListener('hashchange', onHashChange);
   }, []);
 
-  // Loading auth
-  if (session === undefined) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <p className="font-mono text-text-muted text-sm animate-pulse">Loading...</p>
-      </div>
-    );
-  }
-
-  // Not signed in
-  if (!session) return <SignInScreen />;
-
-  const user = session.user;
+  const user = { id: getUserId() };
 
   // No room in URL → Dashboard
   if (!roomId) return <Dashboard user={user} onEnterRoom={(id) => setRoomId(id)} />;
