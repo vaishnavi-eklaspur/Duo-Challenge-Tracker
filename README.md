@@ -2,11 +2,11 @@
 
 *Two people. One chain. Don't break it.*
 
-A real-time habit accountability app for two people doing a shared daily challenge — 14 to 21 days. Built around the psychology of visual momentum, social accountability, and just enough competitive pressure to keep you honest.
+A habit accountability app for two people doing a shared daily challenge — 14 to 21 days. Built around the psychology of visual momentum, social accountability, and just enough competitive pressure to keep you honest.
 
 ![React](https://img.shields.io/badge/React_18-61DAFB?style=flat-square&logo=react&logoColor=black)
 ![Vite](https://img.shields.io/badge/Vite-646CFF?style=flat-square&logo=vite&logoColor=white)
-![Supabase](https://img.shields.io/badge/Supabase-3ECF8E?style=flat-square&logo=supabase&logoColor=black)
+![Neon](https://img.shields.io/badge/Neon-00E599?style=flat-square&logo=postgresql&logoColor=black)
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-06B6D4?style=flat-square&logo=tailwindcss&logoColor=white)
 ![Vercel](https://img.shields.io/badge/Vercel-000000?style=flat-square&logo=vercel&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-F5A623?style=flat-square)
@@ -21,62 +21,63 @@ Most habit apps are built for individuals. But accountability is a social contra
 
 This app puts two people in the same space, each with their own tasks and a shared timeline. A grid fills up amber as days get completed. Skipped days stay dark red. That visual tension is the whole product.
 
-Each person signs in with Google, sets their own tasks independently (1 to 10), and gets a unique invite link per challenge. One person can run multiple challenges with different friends simultaneously — all completely isolated.
+No sign-up, no passwords. Each browser gets a generated identity, each challenge gets a unique invite link, and one person can run multiple challenges with different friends simultaneously — all completely isolated.
 
 ---
 
 > ## 👤 Just here to use the app?
 >
-> **No setup. No installation. No SQL. Nothing.**
->
-> Just open the link, sign in with Google, and start your challenge.
+> **No setup. No installation. No account. Nothing.**
 >
 > ### **→ [Open the App](https://duo-challenge-tracker-brown.vercel.app)**
 >
 > ```
-> 1. Sign in with Google
-> 2. Click "Start a new challenge"
-> 3. Set your name, tasks, duration, and start date
-> 4. Copy the unique room link from the waiting screen
-> 5. Send it to your partner — they sign in and set their own tasks
-> 6. Challenge starts automatically ✦
+> 1. Click "Start a new challenge"
+> 2. Set your name, tasks, duration, and start date
+> 3. Copy the unique room link from the waiting screen
+> 4. Send it to your partner — they open it and set their own tasks
+> 5. Challenge starts automatically ✦
 > ```
 >
 > That's it. Everything is already live and hosted.
 > **You can stop reading here.**
+>
+> ⚠️ One catch of the no-account design: your identity lives in this browser's
+> localStorage. Open the app on a different device (or clear site data) and
+> you're a stranger to your own challenge — stick to one browser.
 
 ---
 
 > ## 🧑‍💻 Are you a developer looking to self-host?
 >
-> You'll need your own Supabase project, Google OAuth credentials, and a Vercel account.
+> You'll need your own free [Neon](https://neon.tech) project and a Vercel account.
 > **Everything you need is in the [Self-Hosting](#-self-hosting) section below.**
 
 ---
 
 ## ✨ Features
 
-**🔐 Authentication**
-- Google OAuth via Supabase Auth — one click, no passwords
-- Session-based identity throughout — no localStorage hacks
-- RLS policies ensure users only ever see data from rooms they belong to
+**👤 Identity without accounts**
+- No sign-in at all — a UUID is generated per browser and kept in localStorage
+- Zero onboarding friction: open link, type name, go
+- Trade-off: identity is per-browser (see the warning above)
 
 **🏠 Dashboard**
-- Lists every active challenge the signed-in user is part of
+- Lists every active challenge this browser's identity is part of
 - Each card shows partner name, duration, current day, and completion %
 - One-click to create a new challenge room
 
 **🔗 Multi-Room Support**
 - Every challenge gets a unique 6-character room ID
 - URL structure: `/#/room/AbC123`
-- Share the link — partner signs in and joins that specific room
+- Share the link — partner opens it and joins that specific room
 - Run multiple challenges with different friends simultaneously, all isolated
 
 **✅ Daily Check-in**
 - Card-based task toggles with a left-to-right fill sweep animation
-- Optimistic UI — state updates instantly, Supabase upserts in background
+- Optimistic UI — state updates instantly, database upserts in background
 - All tasks done → confetti burst + persistent perfect day banner
-- Partner's section updates live as they check off (websocket, no polling)
+- Partner's section refreshes every 4 seconds via polling
 
 **⛓️ The Chain**
 - GitHub contribution graph style grid across the full challenge duration
@@ -102,7 +103,6 @@ Each person signs in with Google, sets their own tasks independently (1 to 10), 
 - Tasks editable during onboarding only — locked permanently once the challenge start date is reached
 - View partner's tasks (read-only)
 - Reset today's check-ins
-- Sign out
 
 **🏁 End Screen**
 - Final stats for both users with personalised closing copy based on completion rate
@@ -118,7 +118,7 @@ Every design decision has a behavioral reason.
 |---|---|
 | **Seinfeld Method** | The grid makes streaks viscerally visible — filling it is genuinely satisfying |
 | **Loss Aversion** | Gap days are dark red by design. The amber chain pulls you forward |
-| **Social Accountability** | Seeing your partner's real-time progress creates pressure without punishment |
+| **Social Accountability** | Seeing your partner's progress creates pressure without punishment |
 | **Identity Reinforcement** | Nudges say *"You're ahead"* not *"Great job"* — identity language, not cheerleading |
 | **Progress Framing** | Stats always show what you did — never *"you missed X days"* |
 | **Zeigarnik Effect** | An incomplete grid creates cognitive tension that motivates completion |
@@ -131,14 +131,17 @@ Every design decision has a behavioral reason.
 |---|---|---|
 | Frontend | React 18 + Vite | Fast builds, single-file component architecture |
 | Styling | Tailwind CSS | Utility-first, zero custom CSS files |
-| Auth | Supabase Auth + Google OAuth | One-click sign in, session management, RLS integration |
-| Database | Supabase Postgres | Managed Postgres with RLS, upsert-safe composite unique constraints |
-| Realtime | Supabase Realtime | Websocket subscription per room — instant partner updates, no polling |
+| Identity | localStorage UUID | No accounts, no OAuth, zero sign-up friction |
+| Database | Neon Postgres via the [Data API](https://neon.tech/docs/data-api/get-started) | Serverless Postgres queried straight from the browser over PostgREST |
+| Query client | `@supabase/supabase-js` | Neon's Data API is PostgREST-compatible, so supabase-js works unchanged as the client |
+| Sync | 4-second polling | Two users, tiny payloads — websockets would be overkill |
 | Deployment | Vercel | Zero-config Vite detection, auto-deploys on every push to main |
 | Animations | CSS keyframes + canvas-confetti | No animation library overhead |
 | Export | html2canvas | Client-side PNG export, no backend needed |
 
-> No external UI library. No routing library. Screen state via `useState`. All business logic computed client-side from Supabase data.
+> No external UI library. No routing library. No environment variables. Screen state via `useState`. All business logic computed client-side.
+
+**How auth-less database access works:** the app ships a static, public RS256 JWT (same trust model as a Supabase anon key). Neon's Data API verifies it against a JWKS file hosted at `/jwks.json` on the deployed site. There is no per-user auth — anyone with the app can write. Fine for a tracker between friends; add real auth if griefing ever matters.
 
 ---
 
@@ -157,13 +160,11 @@ challenge_logs     -- one row per (room × user × day × task)
                    -- UNIQUE (room_id, user_id, day, task_index) → safe upserts
 ```
 
-RLS is enabled on all three tables. Users can only read and write rows in rooms they belong to — enforced at the database level, not just the application layer.
-
 ---
 
 ## 🧑‍💻 Self-Hosting
 
-**Prerequisites:** Node.js 18+, a free [Supabase](https://supabase.com) account, a [Vercel](https://vercel.com) account
+**Prerequisites:** Node.js 18+, a free [Neon](https://neon.tech) account, a [Vercel](https://vercel.com) account
 
 **1. Clone and install**
 
@@ -173,15 +174,13 @@ cd Duo-Challenge-Tracker
 npm install
 ```
 
-**2. Create Supabase tables**
+**2. Create the Neon tables**
 
-Go to Supabase → SQL Editor → run:
+Neon Console → SQL Editor → run:
 
 ```sql
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-
 CREATE TABLE challenge_meta (
-  id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   room_id text UNIQUE NOT NULL,
   user_a_id uuid NOT NULL,
   user_a_name text NOT NULL,
@@ -192,7 +191,7 @@ CREATE TABLE challenge_meta (
 );
 
 CREATE TABLE challenge_config (
-  id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   room_id text NOT NULL,
   user_id uuid NOT NULL,
   user_name text NOT NULL,
@@ -202,7 +201,7 @@ CREATE TABLE challenge_config (
 );
 
 CREATE TABLE challenge_logs (
-  id uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   room_id text NOT NULL,
   user_id uuid NOT NULL,
   day integer NOT NULL,
@@ -211,89 +210,39 @@ CREATE TABLE challenge_logs (
   updated_at timestamptz DEFAULT now(),
   UNIQUE (room_id, user_id, day, task_index)
 );
+
+GRANT ALL ON challenge_meta, challenge_config, challenge_logs TO authenticated;
 ```
 
-**3. Enable RLS**
+**3. Enable the Data API**
 
-```sql
-ALTER TABLE challenge_meta ENABLE ROW LEVEL SECURITY;
-ALTER TABLE challenge_config ENABLE ROW LEVEL SECURITY;
-ALTER TABLE challenge_logs ENABLE ROW LEVEL SECURITY;
+Neon Console → your branch → **Data API** → enable. Note the Data API base URL (looks like `https://<endpoint>.apirest.<region>.aws.neon.tech/neondb`).
 
-CREATE POLICY "Users can view rooms they are part of"
-  ON challenge_meta FOR SELECT
-  USING (auth.uid() = user_a_id OR auth.uid() = user_b_id OR user_b_id IS NULL);
+**4. Set up the static JWT**
 
-CREATE POLICY "Authenticated users can insert rooms"
-  ON challenge_meta FOR INSERT WITH CHECK (auth.uid() = user_a_id);
+The Data API requires a JWT verified against a JWKS URL. This app uses one long-lived public token instead of per-user auth:
 
-CREATE POLICY "Users can update rooms they are part of"
-  ON challenge_meta FOR UPDATE
-  USING (auth.uid() = user_a_id OR auth.uid() = user_b_id);
+1. Generate an RS256 keypair.
+2. Publish the public key as a JWKS file at `https://your-domain/jwks.json` (put it in `public/jwks.json` so Vercel serves it).
+3. Point the Data API's auth provider at that JWKS URL in the Neon console.
+4. Sign a long-expiry JWT with the private key, with claim `"role": "authenticated"`. This token is public by design — it grants the same access to everyone.
 
-CREATE POLICY "Users can view configs in their rooms"
-  ON challenge_config FOR SELECT
-  USING (
-    room_id IN (SELECT room_id FROM challenge_meta WHERE user_a_id = auth.uid() OR user_b_id = auth.uid())
-    OR room_id IN (SELECT room_id FROM challenge_meta WHERE user_b_id IS NULL)
-  );
+**5. Point the app at your backend**
 
-CREATE POLICY "Users can insert their own config"
-  ON challenge_config FOR INSERT WITH CHECK (auth.uid() = user_id);
+There are no environment variables. Edit the two constants at the top of [src/App.jsx](src/App.jsx) — the Data API URL and the JWT.
 
-CREATE POLICY "Users can update their own config"
-  ON challenge_config FOR UPDATE USING (auth.uid() = user_id);
-
-CREATE POLICY "Users can view logs in their rooms"
-  ON challenge_logs FOR SELECT
-  USING (room_id IN (SELECT room_id FROM challenge_meta WHERE user_a_id = auth.uid() OR user_b_id = auth.uid()));
-
-CREATE POLICY "Users can insert their own logs"
-  ON challenge_logs FOR INSERT WITH CHECK (auth.uid() = user_id);
-
-CREATE POLICY "Users can update their own logs"
-  ON challenge_logs FOR UPDATE USING (auth.uid() = user_id);
-
-CREATE POLICY "Users can delete their own logs"
-  ON challenge_logs FOR DELETE USING (auth.uid() = user_id);
-```
-
-**4. Enable Realtime**
-
-Database → Replication → find `challenge_logs` → toggle Realtime ON
-
-**5. Set up Google Auth**
-
-- Supabase → Authentication → Providers → Google → enable
-- Create OAuth credentials in [Google Cloud Console](https://console.cloud.google.com)
-- Add the Supabase callback URL as an authorised redirect URI in Google
-- Paste Client ID and Secret back into Supabase
-- Set Site URL in Supabase → Authentication → URL Configuration to your deployed domain
-
-**6. Environment variables**
-
-```bash
-cp .env.local.example .env.local
-```
-
-```env
-VITE_SUPABASE_URL=https://your-project-id.supabase.co
-VITE_SUPABASE_ANON_KEY=your-anon-key-here
-```
-
-**7. Run locally**
+**6. Run locally**
 
 ```bash
 npm run dev
 # → http://localhost:5173
 ```
 
-**8. Deploy**
+**7. Deploy**
 
 ```bash
-# Push to GitHub → Vercel → New Project → import repo
-# Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY as environment variables
-# Deploy — every push to main triggers an automatic redeploy
+# Push to GitHub → Vercel → New Project → import repo → Deploy
+# No env vars needed. Every push to main triggers an automatic redeploy.
 ```
 
 ---
@@ -303,13 +252,13 @@ npm run dev
 ```
 Duo-Challenge-Tracker/
 ├── src/
-│   ├── App.jsx        # entire app — all components colocated
+│   ├── App.jsx        # entire app — all components colocated (DB client at top)
 │   ├── main.jsx       # React entry point
 │   └── index.css      # Tailwind directives + CSS variables
+├── public/            # static assets incl. jwks.json
 ├── index.html         # Google Fonts — Syne + DM Mono
 ├── vite.config.js
-├── tailwind.config.js
-└── .env.local.example
+└── tailwind.config.js
 ```
 
 ---
@@ -317,13 +266,12 @@ Duo-Challenge-Tracker/
 ## 🗺️ Roadmap
 
 **Completed**
-- [x] Core challenge flow — onboarding, daily check-ins, real-time sync
+- [x] Core challenge flow — onboarding, daily check-ins, partner sync
 - [x] Chain grid, progress rings, 16-condition nudge system
-- [x] Google OAuth via Supabase Auth
+- [x] Zero-friction identity — no accounts, localStorage UUID per browser
 - [x] Multi-room support — unique invite links per challenge
 - [x] Dashboard listing all active challenges
 - [x] Immutable tasks after challenge start date
-- [x] RLS policies enforced at the database level
 - [x] End screen with PNG export
 
 **Coming next**
@@ -332,18 +280,20 @@ Duo-Challenge-Tracker/
 - [ ] Mobile-first responsive redesign
 
 **Future scope**
-- [ ] Supabase Migrations — version-controlled schema, one command replaces all manual SQL setup
+- [ ] Optional real accounts — carry your identity across devices
 - [ ] Streak freeze days — one intentional skip per week that doesn't break the chain
 - [ ] In-app reactions — tap 🔥 or 👀 on your partner's completed day
 - [ ] Challenge templates — pre-built task sets like "DSA grind" or "Morning routine"
 - [ ] Challenge history — archived past challenges with final stats on the dashboard
 - [ ] Multi-person rooms — accountability groups of 3 to 5
 - [ ] Public challenge profiles — shareable proof-of-work page for completed chains
-- [ ] React Native mobile app — same Supabase backend, native mobile experience
+- [ ] React Native mobile app — same backend, native mobile experience
 
 ---
 
 ## ♻️ Resetting a challenge
+
+Run in the Neon SQL Editor:
 
 ```sql
 DELETE FROM challenge_logs WHERE room_id = 'YOUR_ROOM_ID';
