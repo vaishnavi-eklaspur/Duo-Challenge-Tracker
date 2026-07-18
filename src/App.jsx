@@ -17,7 +17,7 @@ const db = new PostgrestClient(
 // Identity: "Sign in with Google" (GIS browser SDK, no auth server).
 // The stable Google account id (`sub`) is the user id, so the same person is
 // recognized on every device. Public client id, safe to ship.
-const GOOGLE_CLIENT_ID = 'PASTE_GOOGLE_CLIENT_ID.apps.googleusercontent.com';
+const GOOGLE_CLIENT_ID = '191385615834-pms2fcmvi9c4ml804kue7emc5c8cjmls.apps.googleusercontent.com';
 
 function loadIdentity() {
   try { return JSON.parse(localStorage.getItem('duo_identity')); } catch { return null; }
