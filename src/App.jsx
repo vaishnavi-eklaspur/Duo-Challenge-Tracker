@@ -1094,6 +1094,8 @@ function RoomView({ user, roomId }) {
   useEffect(() => {
     if (screen !== 'app') return;
     const interval = setInterval(() => {
+      // Hidden tabs don't poll — a forgotten tab would keep Neon compute awake 24/7
+      if (document.hidden) return;
       // Skip polls right after a toggle so the optimistic update isn't clobbered
       if (Date.now() - lastToggleRef.current < 3000) return;
       fetchAll();
