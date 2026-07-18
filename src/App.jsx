@@ -63,71 +63,6 @@ function setHashRoute(roomId) {
 }
 
 // ============================================================
-// GLOBAL STYLES (CSS keyframes)
-// ============================================================
-function GlobalStyles() {
-  return (
-    <style>{`
-      @keyframes fillSweep {
-        0% { background-size: 0% 100%; }
-        100% { background-size: 100% 100%; }
-      }
-      @keyframes pulse-glow {
-        0%, 100% { border-color: rgba(245, 166, 35, 0.4); }
-        50% { border-color: rgba(245, 166, 35, 1); }
-      }
-      @keyframes fade-in {
-        0% { opacity: 0; }
-        100% { opacity: 1; }
-      }
-      @keyframes ring-draw {
-        0% { stroke-dashoffset: var(--circumference); }
-        100% { stroke-dashoffset: var(--target-offset); }
-      }
-      @keyframes scale-bounce {
-        0% { transform: scale(1); }
-        50% { transform: scale(1.02); }
-        100% { transform: scale(1); }
-      }
-      .animate-fade-in { animation: fade-in 200ms ease forwards; }
-      .animate-scale-bounce { animation: scale-bounce 200ms ease; }
-      .fill-sweep {
-        background-image: linear-gradient(to right, #111008, #111008);
-        background-repeat: no-repeat;
-        background-position: left;
-        animation: fillSweep 300ms ease forwards;
-      }
-      .cell-today {
-        animation: pulse-glow 2s infinite;
-      }
-      .tooltip-container { position: relative; }
-      .tooltip-container .tooltip-text {
-        visibility: hidden;
-        opacity: 0;
-        position: absolute;
-        bottom: calc(100% + 6px);
-        left: 50%;
-        transform: translateX(-50%);
-        background: #1e1e1e;
-        color: #f0ece4;
-        padding: 4px 8px;
-        font-family: 'DM Mono', monospace;
-        font-size: 0.7rem;
-        white-space: nowrap;
-        z-index: 50;
-        pointer-events: none;
-        transition: opacity 150ms;
-      }
-      .tooltip-container:hover .tooltip-text {
-        visibility: visible;
-        opacity: 1;
-      }
-      input:focus { outline: none; }
-    `}</style>
-  );
-}
-
-// ============================================================
 // SIGN-IN SCREEN
 // ============================================================
 function SignInScreen() {
@@ -486,10 +421,7 @@ function Onboarding({ meta, roomId, user, onComplete }) {
   const handleNameNext = () => { if (validateName()) setStep(2); };
 
   const handleTasksNext = () => {
-    if (tasks.every((t) => t.trim().length > 0)) {
-      if (isFirstUser) setStep(3);
-      else setStep(3);
-    }
+    if (tasks.every((t) => t.trim().length > 0)) setStep(3);
   };
 
   const handleSetupNext = () => setStep(4);
@@ -719,7 +651,6 @@ function ProgressRing({ pct, name, streak, perfectDays }) {
 // CHAIN GRID
 // ============================================================
 function ChainGrid({ meta, configs, logs, currentDay }) {
-  const gridRef = useRef(null);
   const durationDays = meta.duration_days;
   const users = [
     { id: meta.user_a_id, name: meta.user_a_name },
@@ -755,7 +686,7 @@ function ChainGrid({ meta, configs, logs, currentDay }) {
   };
 
   return (
-    <div ref={gridRef} id="chain-grid" className="w-full">
+    <div id="chain-grid" className="w-full">
       <p className="font-syne font-semibold text-text-muted text-[0.65rem] uppercase tracking-[0.15em] mb-4">THE CHAIN</p>
       <div className="space-y-2 overflow-x-auto">
         {users.map((u) => (
@@ -980,7 +911,6 @@ function RoomView({ user, roomId }) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [confettiFiredForPerfect, setConfettiFiredForPerfect] = useState(false);
   const [confettiFiredForEnd, setConfettiFiredForEnd] = useState(false);
-  const subscriptionRef = useRef(null);
 
   // --- Derived values ---
   const myUserId = user.id;
@@ -1007,7 +937,6 @@ function RoomView({ user, roomId }) {
 
   const durationDays = meta?.duration_days || 21;
   const clampedDay = Math.min(Math.max(currentDay, 1), durationDays);
-  const daysElapsed = Math.min(Math.max(currentDay, 1), durationDays);
 
   const myTaskCount = myConfig?.task_count || 0;
   const partnerTaskCount = partnerConfig?.task_count || 0;
@@ -1029,7 +958,7 @@ function RoomView({ user, roomId }) {
     if (!taskCount || !meta) return { streak: 0, perfectDays: 0, totalCompleted: 0, completionPct: 0, daysSinceLastComplete: 0, bestStreak: 0 };
     const userLogs = logs.filter((l) => l.user_id === userId && l.completed);
     const totalCompleted = userLogs.length;
-    const completionPct = daysElapsed > 0 ? Math.round((totalCompleted / (taskCount * daysElapsed)) * 100) : 0;
+    const completionPct = clampedDay > 0 ? Math.round((totalCompleted / (taskCount * clampedDay)) * 100) : 0;
 
     let perfectDays = 0;
     const dayLimit = Math.min(currentDay, durationDays);
@@ -1064,7 +993,7 @@ function RoomView({ user, roomId }) {
     }
 
     return { streak, perfectDays, totalCompleted, completionPct: Math.min(completionPct, 100), daysSinceLastComplete, bestStreak };
-  }, [logs, meta, currentDay, durationDays, daysElapsed]);
+  }, [logs, meta, currentDay, durationDays, clampedDay]);
 
   const myStats = useMemo(() => computeStats(myUserId, myTaskCount), [computeStats, myUserId, myTaskCount]);
   const partnerStats = useMemo(() => computeStats(partnerId, partnerTaskCount), [computeStats, partnerId, partnerTaskCount]);
@@ -1206,12 +1135,8 @@ function RoomView({ user, roomId }) {
       })
       .subscribe();
 
-    subscriptionRef.current = channel;
-
     return () => {
-      if (subscriptionRef.current) {
-        supabase.removeChannel(subscriptionRef.current);
-      }
+      supabase.removeChannel(channel);
     };
   }, [screen, roomId]);
 
@@ -1276,20 +1201,7 @@ function RoomView({ user, roomId }) {
   const handleOnboardingComplete = async (displayName, destination) => {
     setMyName(displayName);
     await fetchAll();
-    if (destination === 'waiting') {
-      // Refetch to get latest meta
-      const { data: metaData } = await supabase.from('challenge_meta').select('*').eq('room_id', roomId).maybeSingle();
-      if (metaData) setMeta(metaData);
-      setScreen('waiting');
-    } else {
-      const { data: metaData } = await supabase.from('challenge_meta').select('*').eq('room_id', roomId).maybeSingle();
-      if (metaData) setMeta(metaData);
-      const { data: configData } = await supabase.from('challenge_config').select('*').eq('room_id', roomId);
-      setConfigs(configData || []);
-      const { data: logData } = await supabase.from('challenge_logs').select('*').eq('room_id', roomId);
-      setLogs(logData || []);
-      setScreen('app');
-    }
+    setScreen(destination);
   };
 
   // --- Grid screenshot ---
@@ -1537,7 +1449,7 @@ function RoomView({ user, roomId }) {
             <div className="grid grid-cols-2 gap-3 mb-6">
               {[
                 { label: 'Completion rate', value: `${myStats.completionPct}%` },
-                { label: 'Tasks done', value: `${myStats.totalCompleted} / ${myTaskCount * daysElapsed} possible` },
+                { label: 'Tasks done', value: `${myStats.totalCompleted} / ${myTaskCount * clampedDay} possible` },
                 { label: 'Perfect days', value: `${myStats.perfectDays}` },
                 { label: 'Days left', value: `${Math.max(0, durationDays - currentDay)}` },
               ].map(({ label, value }) => (
@@ -1642,42 +1554,20 @@ export default function App() {
   // Loading auth
   if (session === undefined) {
     return (
-      <>
-        <GlobalStyles />
-        <div className="flex items-center justify-center min-h-screen">
-          <p className="font-mono text-text-muted text-sm animate-pulse">Loading...</p>
-        </div>
-      </>
+      <div className="flex items-center justify-center min-h-screen">
+        <p className="font-mono text-text-muted text-sm animate-pulse">Loading...</p>
+      </div>
     );
   }
 
   // Not signed in
-  if (!session) {
-    return (
-      <>
-        <GlobalStyles />
-        <SignInScreen />
-      </>
-    );
-  }
+  if (!session) return <SignInScreen />;
 
   const user = session.user;
 
   // No room in URL → Dashboard
-  if (!roomId) {
-    return (
-      <>
-        <GlobalStyles />
-        <Dashboard user={user} onEnterRoom={(id) => setRoomId(id)} />
-      </>
-    );
-  }
+  if (!roomId) return <Dashboard user={user} onEnterRoom={(id) => setRoomId(id)} />;
 
   // Room view
-  return (
-    <>
-      <GlobalStyles />
-      <RoomView key={roomId} user={user} roomId={roomId} />
-    </>
-  );
+  return <RoomView key={roomId} user={user} roomId={roomId} />;
 }
