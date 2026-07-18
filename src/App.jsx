@@ -1,18 +1,17 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { createClient } from '@supabase/supabase-js';
+import { PostgrestClient } from '@supabase/postgrest-js';
 import confetti from 'canvas-confetti';
 import html2canvas from 'html2canvas';
 
 // ============================================================
-// DATABASE CLIENT (Neon Data API — PostgREST-compatible, so
-// supabase-js works as the query client unchanged)
+// DATABASE CLIENT (Neon Data API, PostgREST protocol)
 // ============================================================
 // ponytail: the key is a static public JWT (same model as a Supabase anon
 // key, verified against /jwks.json on this site). No per-user auth — anyone
 // with the app can write. Add real auth if griefing ever matters.
-const db = createClient(
-  'https://ep-autumn-sun-af5lfcfl.apirest.c-2.us-west-2.aws.neon.tech/neondb',
-  'eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6ImR1by0xIn0.eyJpc3MiOiJkdW8tY2hhbGxlbmdlLXRyYWNrZXIiLCJyb2xlIjoiYXV0aGVudGljYXRlZCIsInN1YiI6ImFub24iLCJpYXQiOjE3ODQzNjc1OTQsImV4cCI6MjA5OTcyNzU5NH0.Nl0cESNl4LxpJm1cH89RhMnRS4wvk5lBM2JwjiG1tdDIjSGPWoL0F6HK5KBdmgycyJ6yAZ6vvDWPbOG4kpztucD_V-XE-ukPczf2mduaAGeTTWe716foc5A-unXq5BXUm4GLxVZ7XI3YcXX7TWhoEfx3exPj_HikHFaOhYYNRpTecSyk67yJXygogGib57bUqrW-WipbeJhYDiBTSbxMcCqrxNfMvC0a-JLalsH-LNz9UFMy33bIhKr7ztFo8q6pKZISXbGn5-AKgBWXvfbkdJBIAUK-MxZeQDA7fxy5NuLu-BDc8Bxuqtcb71tepahRXoMKrwFTdVOgIOtYbf70oA'
+const db = new PostgrestClient(
+  'https://ep-autumn-sun-af5lfcfl.apirest.c-2.us-west-2.aws.neon.tech/neondb/rest/v1',
+  { headers: { Authorization: 'Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6ImR1by0xIn0.eyJpc3MiOiJkdW8tY2hhbGxlbmdlLXRyYWNrZXIiLCJyb2xlIjoiYXV0aGVudGljYXRlZCIsInN1YiI6ImFub24iLCJpYXQiOjE3ODQzNjc1OTQsImV4cCI6MjA5OTcyNzU5NH0.Nl0cESNl4LxpJm1cH89RhMnRS4wvk5lBM2JwjiG1tdDIjSGPWoL0F6HK5KBdmgycyJ6yAZ6vvDWPbOG4kpztucD_V-XE-ukPczf2mduaAGeTTWe716foc5A-unXq5BXUm4GLxVZ7XI3YcXX7TWhoEfx3exPj_HikHFaOhYYNRpTecSyk67yJXygogGib57bUqrW-WipbeJhYDiBTSbxMcCqrxNfMvC0a-JLalsH-LNz9UFMy33bIhKr7ztFo8q6pKZISXbGn5-AKgBWXvfbkdJBIAUK-MxZeQDA7fxy5NuLu-BDc8Bxuqtcb71tepahRXoMKrwFTdVOgIOtYbf70oA' } }
 );
 
 // Per-browser identity — no accounts.
@@ -312,7 +311,7 @@ function OnboardingSetupStep({ duration, setDuration, startDate, setStartDate, o
   );
 }
 
-function OnboardingReviewStep({ name, tasks, duration, startDate, ctaLabel, onConfirm, onBack, readOnlySetup }) {
+function OnboardingReviewStep({ name, tasks, duration, startDate, ctaLabel, onConfirm, onBack, readOnlySetup, error }) {
   return (
     <div className="flex flex-col items-center justify-center min-h-screen px-6 animate-fade-in">
       <h2 className="font-syne text-text-primary text-2xl font-extrabold mb-6">Review & Confirm</h2>
@@ -340,6 +339,7 @@ function OnboardingReviewStep({ name, tasks, duration, startDate, ctaLabel, onCo
           </div>
         </div>
       </div>
+      {error && <p className="text-red-400 font-mono text-xs mt-4">{error}</p>}
       <div className="flex gap-4 mt-8">
         <button onClick={onBack} className="font-syne text-text-muted px-6 py-3 hover:text-text-primary transition-colors">← Back</button>
         <button onClick={onConfirm} className="bg-amber text-bg font-syne font-semibold px-8 py-3 rounded-[4px] hover:opacity-90 transition-opacity">{ctaLabel}</button>
@@ -385,6 +385,7 @@ function Onboarding({ meta, roomId, user, onComplete }) {
   const [duration, setDuration] = useState(21);
   const [startDate, setStartDate] = useState(todayStr());
   const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState('');
 
   const validateName = () => {
     const trimmed = name.trim();
@@ -433,6 +434,7 @@ function Onboarding({ meta, roomId, user, onComplete }) {
       onComplete(trimmedName, 'waiting');
     } catch (e) {
       console.error(e);
+      setSubmitError('Could not save. Check your connection and try again.');
       setSubmitting(false);
     }
   };
@@ -459,6 +461,7 @@ function Onboarding({ meta, roomId, user, onComplete }) {
       onComplete(trimmedName, 'app');
     } catch (e) {
       console.error(e);
+      setSubmitError('Could not save. Check your connection and try again.');
       setSubmitting(false);
     }
   };
@@ -498,6 +501,7 @@ function Onboarding({ meta, roomId, user, onComplete }) {
           name={name.trim()} tasks={tasks.map((t) => t.trim())}
           duration={duration} startDate={startDate}
           ctaLabel="Lock it in →" onConfirm={handleSubmitFirstUser} onBack={() => setStep(3)}
+          error={submitError}
         />
       );
     }
@@ -529,7 +533,7 @@ function Onboarding({ meta, roomId, user, onComplete }) {
           name={name.trim()} tasks={tasks.map((t) => t.trim())}
           duration={meta.duration_days} startDate={meta.start_date}
           ctaLabel="Join the challenge →" onConfirm={handleSubmitSecondUser} onBack={() => setStep(2)}
-          readOnlySetup
+          readOnlySetup error={submitError}
         />
       );
     }
@@ -736,6 +740,8 @@ function SettingsPanel({ open, onClose, myName, partnerName, myConfig, partnerCo
       setTimeout(() => {
         onSettingsSaveRedirect();
       }, 1500);
+    } else {
+      setSaveMsg('Save failed. Try again.');
     }
     setSaving(false);
   };
