@@ -113,9 +113,21 @@ function SignInScreen({ onSignIn }) {
   }, [onSignIn]);
 
   const features = ['Shared daily tasks', 'Streaks & perfect days', 'Real-time partner sync'];
+  // Decorative preview of "the chain" — same visual language as the real grid.
+  const cellColor = (c) => (c === 'p' || c === 't') ? '#f5a623' : c === 'h' ? 'rgba(245,166,35,0.3)' : c === 'g' ? '#1a0a0a' : '#0f0f0f';
+  const chainRows = [
+    ['p','p','p','h','p','p','p','p','h','p','p','t','u','u','u','u','u','u','u','u','u'],
+    ['p','p','p','p','p','h','p','p','h','p','p','t','u','u','u','u','u','u','u','u','u'],
+  ];
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen px-6 py-16 animate-fade-in text-center">
+    <div
+      className="flex flex-col items-center justify-center min-h-screen px-6 py-16 animate-fade-in text-center"
+      style={{
+        backgroundImage: 'linear-gradient(rgba(245,166,35,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(245,166,35,0.05) 1px, transparent 1px)',
+        backgroundSize: '30px 30px',
+      }}
+    >
       <svg width="72" height="72" viewBox="0 0 64 64" className="mb-6" aria-hidden="true">
         <circle cx="25" cy="32" r="13" fill="none" stroke="#f5a623" strokeWidth="5" />
         <circle cx="41" cy="32" r="13" fill="none" stroke="#0a0a0a" strokeWidth="10" />
@@ -123,6 +135,25 @@ function SignInScreen({ onSignIn }) {
       </svg>
       <h1 className="font-syne text-text-primary text-4xl sm:text-5xl font-extrabold tracking-tight mb-3">Duo Challenge Tracker</h1>
       <p className="font-mono text-text-muted text-sm sm:text-base mb-8 max-w-md">{"Two people. One daily chain. Don't break it."}</p>
+
+      <div className="w-full max-w-md bg-surface border border-border-muted rounded-[6px] p-5 mb-8">
+        <div className="flex items-center justify-between mb-3">
+          <span className="font-syne text-text-muted text-[0.6rem] uppercase tracking-[0.15em]">The chain</span>
+          <span className="font-mono text-amber text-xs">Day 12 / 21</span>
+        </div>
+        {chainRows.map((row, ri) => (
+          <div key={ri} className="flex gap-[3px] mb-[3px] last:mb-0">
+            {row.map((c, ci) => (
+              <div
+                key={ci}
+                className={`flex-1 aspect-square rounded-[2px] ${c === 't' ? 'cell-today border-[1.5px] border-amber' : ''}`}
+                style={{ backgroundColor: cellColor(c), minWidth: '8px' }}
+              />
+            ))}
+          </div>
+        ))}
+      </div>
+
       <div className="flex flex-wrap justify-center gap-x-6 gap-y-2 mb-10">
         {features.map((f) => (
           <span key={f} className="flex items-center gap-2 font-mono text-text-muted text-xs">
