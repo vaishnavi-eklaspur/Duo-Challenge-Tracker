@@ -112,11 +112,27 @@ function SignInScreen({ onSignIn }) {
     return () => clearInterval(t);
   }, [onSignIn]);
 
+  const features = ['Shared daily tasks', 'Streaks & perfect days', 'Real-time partner sync'];
+
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen px-6 animate-fade-in">
-      <h1 className="font-syne text-text-primary text-3xl font-extrabold mb-2">Duo Challenge Tracker</h1>
-      <p className="font-mono text-text-muted text-sm mb-10">Sign in to start or join a challenge.</p>
+    <div className="flex flex-col items-center justify-center min-h-screen px-6 py-16 animate-fade-in text-center">
+      <svg width="72" height="72" viewBox="0 0 64 64" className="mb-6" aria-hidden="true">
+        <circle cx="25" cy="32" r="13" fill="none" stroke="#f5a623" strokeWidth="5" />
+        <circle cx="41" cy="32" r="13" fill="none" stroke="#0a0a0a" strokeWidth="10" />
+        <circle cx="41" cy="32" r="13" fill="none" stroke="#f5a623" strokeWidth="5" />
+      </svg>
+      <h1 className="font-syne text-text-primary text-4xl sm:text-5xl font-extrabold tracking-tight mb-3">Duo Challenge Tracker</h1>
+      <p className="font-mono text-text-muted text-sm sm:text-base mb-8 max-w-md">{"Two people. One daily chain. Don't break it."}</p>
+      <div className="flex flex-wrap justify-center gap-x-6 gap-y-2 mb-10">
+        {features.map((f) => (
+          <span key={f} className="flex items-center gap-2 font-mono text-text-muted text-xs">
+            <svg width="12" height="12" viewBox="0 0 10 10" fill="none" aria-hidden="true"><path d="M2 5L4.5 7.5L8 3" stroke="#f5a623" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            {f}
+          </span>
+        ))}
+      </div>
       <div ref={btnRef} />
+      <p className="font-mono text-text-muted text-xs mt-4 opacity-70">Sign in to start or join a challenge.</p>
     </div>
   );
 }
