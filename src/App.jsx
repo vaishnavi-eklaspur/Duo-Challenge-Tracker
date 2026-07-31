@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { PostgrestClient } from '@supabase/postgrest-js';
 import confetti from 'canvas-confetti';
 import html2canvas from 'html2canvas';
+import AuthorFooter from './AuthorFooter';
 
 // ============================================================
 // DATABASE CLIENT (Neon Data API, PostgREST protocol)
@@ -1555,13 +1556,17 @@ export default function App() {
     return () => window.removeEventListener('hashchange', onHashChange);
   }, []);
 
-  if (!identity) return <SignInScreen onSignIn={setIdentity} />;
+  const user = identity ? { id: identity.id } : null;
 
-  const user = { id: identity.id };
+  let screen;
+  if (!identity) screen = <SignInScreen onSignIn={setIdentity} />;
+  else if (!roomId) screen = <Dashboard user={user} onEnterRoom={(id) => setRoomId(id)} />;
+  else screen = <RoomView key={roomId} user={user} roomId={roomId} />;
 
-  // No room in URL → Dashboard
-  if (!roomId) return <Dashboard user={user} onEnterRoom={(id) => setRoomId(id)} />;
-
-  // Room view
-  return <RoomView key={roomId} user={user} roomId={roomId} />;
+  return (
+    <>
+      {screen}
+      <AuthorFooter productName="Duo Challenge Tracker" tagline="React · Vite · Neon Postgres · Vercel" />
+    </>
+  );
 }
