@@ -35,23 +35,25 @@ const ICONS = {
   ),
 };
 
+// Themed for Duo Challenge Tracker's dark palette (bg #0a0a0a, amber accent,
+// Syne + DM Mono). Recolor this block per project; markup + brand stay fixed.
 const CSS = `
-.af-footer{background:#fff;border-top:1px solid #e2e8f0;padding:24px 0;font-family:'Inter',system-ui,-apple-system,sans-serif;}
+.af-footer{background:#0a0a0a;border-top:1px solid #1e1e1e;padding:24px 0;font-family:'Syne',system-ui,-apple-system,sans-serif;}
 .af-row{max-width:1152px;margin:0 auto;padding:0 24px;display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:16px;}
 .af-id{display:flex;align-items:center;gap:12px;text-decoration:none;}
-.af-avatar{width:36px;height:36px;border-radius:9999px;background:#0f172a;color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;letter-spacing:.02em;transition:background .15s;}
-.af-id:hover .af-avatar{background:#334155;}
-.af-name{margin:0;font-size:12px;font-weight:600;color:#0f172a;line-height:1.2;transition:color .15s;}
-.af-id:hover .af-name{color:#475569;}
-.af-tag{margin:0;font-size:11px;color:#64748b;line-height:1.2;}
+.af-avatar{width:36px;height:36px;border-radius:9999px;background:#f5a623;color:#0a0a0a;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;letter-spacing:.02em;transition:opacity .15s;}
+.af-id:hover .af-avatar{opacity:.85;}
+.af-name{margin:0;font-size:12px;font-weight:600;color:#f0ece4;line-height:1.2;transition:color .15s;}
+.af-id:hover .af-name{color:#f5a623;}
+.af-tag{margin:0;font-size:11px;color:#6b6660;line-height:1.2;font-family:'DM Mono',monospace;}
 .af-links{display:flex;align-items:center;gap:4px;}
-.af-icon{width:32px;height:32px;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#64748b;transition:color .15s,background .15s;}
-.af-icon:hover{color:#0f172a;background:#f1f5f9;}
-.af-text{padding:0 8px;font-size:11px;font-weight:600;color:#64748b;text-decoration:none;transition:color .15s;}
-.af-text:hover{color:#0f172a;}
-.af-div{display:inline-block;margin:0 4px;height:16px;width:1px;background:#e2e8f0;}
-.af-copy-wrap{max-width:1152px;margin:16px auto 0;padding:12px 24px 0;border-top:1px solid #f1f5f9;}
-.af-copy{margin:0;font-size:11px;color:#94a3b8;}
+.af-icon{width:32px;height:32px;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#6b6660;transition:color .15s,background .15s;}
+.af-icon:hover{color:#f0ece4;background:#1e1e1e;}
+.af-text{padding:0 8px;font-size:11px;font-weight:600;color:#6b6660;text-decoration:none;transition:color .15s;font-family:'DM Mono',monospace;}
+.af-text:hover{color:#f0ece4;}
+.af-div{display:inline-block;margin:0 4px;height:16px;width:1px;background:#1e1e1e;}
+.af-copy-wrap{max-width:1152px;margin:16px auto 0;padding:12px 24px 0;border-top:1px solid #1e1e1e;}
+.af-copy{margin:0;font-size:11px;color:#6b6660;font-family:'DM Mono',monospace;}
 `;
 
 const SOCIALS = [
