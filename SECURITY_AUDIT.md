@@ -39,8 +39,8 @@ This report states what was tested and what was changed. It does **not** claim t
 **(a) What I found.** `git log --all --diff-filter=A` shows `.env.local` was committed in the very first commit (`440ab1b`), and a `.env.local.example` was committed carrying the **same real values** (not placeholders):
 
 ```
-VITE_SUPABASE_URL=https://deleted-project.supabase.co
-VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiI...role":"anon"...
+VITE_SUPABASE_URL=https://<project-ref>.supabase.co   # redacted; project deleted
+VITE_SUPABASE_ANON_KEY=<supabase anon key — redacted>  # client anon key, now dead
 ```
 
 Both files still exist in git history even though they were later removed from the working tree. Separately, the earlier "fix" that added `.env.local` to `.gitignore` was a no-op because the file was saved as UTF-16, which git cannot parse — that has since been rewritten as ASCII and verified with `git check-ignore`.
@@ -179,7 +179,7 @@ These are **not fixed**, by deliberate decision, scope, or because they require 
    git push --force --all && git push --force --tags
    ```
 
-   (`git filter-repo` drops the `origin` remote as a safety measure, hence the re-add.) Verify afterward with `git log --all -S deleted-project` returning nothing.
+   (`git filter-repo` drops the `origin` remote as a safety measure, hence the re-add.) Verify afterward that `git log --all -S "<your-old-supabase-project-ref>"` returns nothing.
 
 4. **No rate limiting or origin-restricted CORS.** Both need a server or edge/WAF layer that this static deployment doesn't have. The blast radius is bounded by the fact that the access token is already public.
 
