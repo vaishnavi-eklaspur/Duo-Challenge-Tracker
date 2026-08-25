@@ -133,7 +133,7 @@ Every design decision has a behavioral reason.
 | Styling | Tailwind CSS | Utility-first, zero custom CSS files |
 | Identity | localStorage UUID | No accounts, no OAuth, zero sign-up friction |
 | Database | Neon Postgres via the [Data API](https://neon.tech/docs/data-api/get-started) | Serverless Postgres queried straight from the browser over PostgREST |
-| Query client | `@supabase/supabase-js` | Neon's Data API is PostgREST-compatible, so supabase-js works unchanged as the client |
+| Query client | `@supabase/postgrest-js` | Neon's Data API speaks PostgREST, so the standalone PostgREST client drives every query (no auth/realtime/storage bundle) |
 | Sync | 4-second polling | Two users, tiny payloads — websockets would be overkill |
 | Deployment | Vercel | Zero-config Vite detection, auto-deploys on every push to main |
 | Animations | CSS keyframes + canvas-confetti | No animation library overhead |

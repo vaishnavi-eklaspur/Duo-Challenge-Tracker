@@ -3,6 +3,7 @@ import { PostgrestClient } from '@supabase/postgrest-js';
 import confetti from 'canvas-confetti';
 import html2canvas from 'html2canvas';
 import AuthorFooter from './AuthorFooter';
+import { possessive, plural, formatDate, todayStr, computeCurrentDay, generateRoomId } from './lib';
 
 // ============================================================
 // DATABASE CLIENT (Neon Data API, PostgREST protocol)
@@ -31,46 +32,8 @@ function signOut() {
 }
 
 // ============================================================
-// HELPERS
+// HELPERS (pure ones live in lib.js so they can be unit-tested)
 // ============================================================
-function possessive(name) {
-  if (!name) return '';
-  return name.endsWith('s') ? `${name}'` : `${name}'s`;
-}
-
-function plural(n, singular, pluralForm) {
-  return n === 1 ? singular : (pluralForm || singular + 's');
-}
-
-function formatDate(dateStr) {
-  const d = new Date(dateStr + 'T00:00:00');
-  return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-}
-
-function daysBetween(dateStr1, dateStr2) {
-  const d1 = new Date(dateStr1 + 'T00:00:00');
-  const d2 = new Date(dateStr2 + 'T00:00:00');
-  return Math.floor((d2 - d1) / 86400000);
-}
-
-function todayStr() {
-  const d = new Date();
-  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
-}
-
-function computeCurrentDay(startDate) {
-  return daysBetween(startDate, todayStr()) + 1;
-}
-
-function generateRoomId() {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-  let result = '';
-  const arr = new Uint8Array(6);
-  crypto.getRandomValues(arr);
-  for (let i = 0; i < 6; i++) result += chars[arr[i] % chars.length];
-  return result;
-}
-
 function getRoomIdFromHash() {
   const hash = window.location.hash;
   const match = hash.match(/^#\/room\/([A-Za-z0-9]{6})$/);
