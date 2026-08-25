@@ -16,7 +16,7 @@ This report states what was tested and what was changed. It does **not** claim t
 | 1 | Secrets | `.gitignore` now correctly ignores `.env.local` (was UTF-16-encoded and silently non-functional earlier) | — | **Fixed** |
 | 1 | Secrets | Current in-code credentials (Neon token, Google client ID, `jwks.json`) are public-by-design, not private secrets | Info | **Verified** |
 | 2 | Dependencies | 6 advisories in the dev/build toolchain; **0 in production dependencies** | High→ | **Fixed** (4 patched) |
-| 2 | Dependencies | esbuild/vite dev-server advisory needs a breaking `vite@5→8` upgrade | Low (dev-only) | **Flagged** |
+| 2 | Dependencies | esbuild/vite dev-server advisory (needed breaking `vite@5→8`) — upgraded to Vite 8; `npm audit` now **0 total** | Low (dev-only) | **Fixed** |
 | 3 | Auth / access | No RLS; shared static JWT grants any visitor full read/write/delete on **every** challenge (IDOR by design) | High | **Flagged** (architectural) |
 | 3 | Auth / access | Google ID token decoded client-side without signature verification | Medium | **Flagged** (identity ≠ access control here) |
 | 3 | Auth / access | Static sign-in JWT has a 10-year expiry and never rotates | Low | **Flagged** |
@@ -27,7 +27,7 @@ This report states what was tested and what was changed. It does **not** claim t
 | 5 | Transport | CORS effectively open at the Data API; no rate limiting (no server tier) | Medium | **Flagged** |
 | 6 | Errors / logging | Users see generic messages; no stack traces; prod build minified; no debug mode; no PII in logs | — | **Verified** |
 | 7 | Data protection | Neon encrypts at rest; client uses the non-privileged `authenticated` role, not the owner connection string | — | **Verified** |
-| 7 | Data protection | Unused `anonymous` role still holds table grants | Low | **Flagged** (recommended REVOKE) |
+| 7 | Data protection | Unused `anonymous` role held table grants | Low | **Fixed** (grants revoked) |
 | 8 | Config / hygiene | `.gitignore` covers `node_modules` / `.env.local` / `dist`; README documents setup with no live private secrets | — | **Verified** |
 | 9 | Code quality | No tests, no CI | Medium | **Fixed** (added 6 unit tests + GitHub Actions) |
 | 9 | Code quality | Commit history is granular and meaningful (23 commits), not a single squash | — | **Verified** |
@@ -70,7 +70,7 @@ There is no private key, service-role token, or database owner password anywhere
 
 **(c) Fix applied / recommended.**
 - ✅ Ran `npm audit fix` (non-breaking): patched `@babel/core`, `postcss`, `nanoid`, `picomatch`. 6 → 2 advisories.
-- ⚠️ The remaining 2 (esbuild + the vite that depends on it) require `vite@5 → vite@8`, a **breaking** major upgrade. I did **not** apply this silently. Recommend upgrading Vite deliberately and re-testing the build in a branch.
+- ✅ Then upgraded `vite@5 → vite@8` (+ `@vitejs/plugin-react@6`) deliberately; the build and the `node:test` suite both pass on the new major, so `npm audit` now reports **0 vulnerabilities** across the whole tree. Pinned `engines.node >= 20.19` (Vite 8's runtime floor).
 
 **(d) Interview explanation.** *"npm audit flagged six issues, but all of them were in build tooling — `npm audit --omit=dev` shows zero in what actually ships to the browser. I applied the non-breaking fixes, which cleared four of them, and deliberately did not force the last two because the only clean fix is a major Vite upgrade that could break the build. I flagged it instead, and wired the CI to fail only on production-dependency vulnerabilities so the dev-only noise doesn't create false alarms."*
 
@@ -84,13 +84,13 @@ There is no private key, service-role token, or database owner password anywhere
 
 **(b) Severity.** High for the open-database/IDOR condition. Medium for the unverified client-side token decode. Low for the 10-year non-rotating token.
 
-**(c) Fix applied / recommended.** These are **architectural** and not safely patchable in a static SPA — see [Known Limitations](#known-limitations). The honest fix is a thin backend (or Postgres RLS driven by per-user JWTs minted server-side) so that each user gets a token scoped to their own `sub`, and RLS policies restrict every row to its owner/partner. One low-risk hardening you can apply now (recommended, not auto-run against your live DB):
+**(c) Fix applied / recommended.** These are **architectural** and not safely patchable in a static SPA — see [Known Limitations](#known-limitations). The honest fix is a thin backend (or Postgres RLS driven by per-user JWTs minted server-side) so that each user gets a token scoped to their own `sub`, and RLS policies restrict every row to its owner/partner. One low-risk hardening has been **applied**: the unused `anonymous` role's grants were revoked —
 
 ```sql
-REVOKE ALL ON challenge_meta, challenge_config, challenge_logs FROM anonymous;
+REVOKE ALL PRIVILEGES ON challenge_meta, challenge_config, challenge_logs FROM anonymous;
 ```
 
-The `anonymous` role is never used (unauthenticated requests are already rejected), so revoking its grants shrinks the attack surface with no functional impact.
+The `anonymous` role is never used (unauthenticated requests are already rejected), so revoking its grants shrank the attack surface with no functional impact. Verified after the change: the app's `authenticated` role still reads (200) and a no-token request is rejected (400).
 
 **(d) Interview explanation.** *"There are no passwords — it's Google sign-in — so the interesting question is authorization, not authentication. This is a serverless SPA that talks straight to Postgres over Neon's Data API using one shared public token, and I confirmed against the live database that row-level security is off and that token has full CRUD. That means it's identity without authorization: anyone can reach anyone's data. I did not pretend to fix that with a client-side patch, because you can't — the real fix is a small backend that mints per-user tokens plus RLS policies scoping rows to their owner. I documented it as the headline limitation and gave the exact RLS/scoping design, which for a two-person habit tracker is a conscious trade-off, not an oversight."*
 
@@ -135,7 +135,7 @@ The `anonymous` role is never used (unauthenticated requests are already rejecte
 
 **(b) Severity.** Low. Data-at-rest and connection privilege are handled; the residual risk is the broad row access covered in §3.
 
-**(c) Fix applied / recommended.** ✅ Verified encryption-at-rest and least-privilege connection role. ⚠️ Recommend the `REVOKE … FROM anonymous` above, and — if you ever store more than a first name — reconsider whether it's needed (less stored PII = less risk).
+**(c) Fix applied / recommended.** ✅ Verified encryption-at-rest and least-privilege connection role. ✅ Applied the `REVOKE … FROM anonymous` (see §3). ⚠️ If you ever store more than a first name, reconsider whether it's needed (less stored PII = less risk).
 
 **(d) Interview explanation.** *"Data's encrypted at rest by Neon, and importantly the browser connects as a limited role, not the database owner — the owner connection string never leaves the server side of the tooling. The app deliberately stores very little personal data: a Google user ID, a first name, and the tasks people type. The weakness isn't what's stored or how it's encrypted, it's who can read it, which is the row-level-access issue I covered under authorization."*
 
@@ -171,12 +171,16 @@ These are **not fixed**, by deliberate decision, scope, or because they require 
 
 2. **Sign-in identity is not cryptographically enforced.** The Google ID token is decoded in the browser without signature verification (there's no server to verify it), and identity lives in `localStorage`. Someone could forge an identity locally. It doesn't grant extra data access beyond limitation #1 (the DB is already open), but it means "who you are" is a convenience, not a security boundary.
 
-3. **Leaked secrets remain in git history.** The old Supabase URL/anon key are still reachable via `git log`. Rotation is unnecessary (the project is deleted), but a history rewrite (`git filter-repo` / BFG) + force-push is left to you as a deliberate manual action.
+3. **Leaked secrets remain in git history — one manual command away from removed.** The old Supabase URL/anon key are still reachable via `git log`. Rotation is unnecessary (the project is deleted). The history rewrite itself is a destructive, force-push operation that must be run by you (it was intentionally not auto-executed):
 
-4. **Two dev-toolchain vulnerabilities remain** (esbuild/vite dev server). The only clean fix is a breaking `vite@5 → vite@8` upgrade, which should be done and tested deliberately rather than auto-applied. Zero production-dependency vulnerabilities remain.
+   ```bash
+   git filter-repo --force --invert-paths --path .env.local --path .env.local.example
+   git remote add origin https://github.com/vaishnavi-eklaspur/Duo-Challenge-Tracker.git
+   git push --force --all && git push --force --tags
+   ```
 
-5. **No rate limiting or origin-restricted CORS.** Both need a server or edge/WAF layer that this static deployment doesn't have. The blast radius is bounded by the fact that the access token is already public.
+   (`git filter-repo` drops the `origin` remote as a safety measure, hence the re-add.) Verify afterward with `git log --all -S deleted-project` returning nothing.
 
-6. **The CSP is verified for page load and button render, not the full popup flow.** The added Content-Security-Policy allows the specific Google sign-in origins; the sign-in button renders under it and the page loads with no CSP violations, but the complete OAuth popup round-trip should be re-checked in the browser after deploy. If Google sign-in ever breaks after a Google-side change, the CSP `script-src`/`frame-src`/`connect-src` entries for `accounts.google.com` are the first place to look. Rollback is simply removing the `Content-Security-Policy` entry from `vercel.json`.
+4. **No rate limiting or origin-restricted CORS.** Both need a server or edge/WAF layer that this static deployment doesn't have. The blast radius is bounded by the fact that the access token is already public.
 
-7. **Unused `anonymous` DB grants not yet revoked.** Recommended `REVOKE` statement provided in §3; left unrun because it modifies your live database and you should apply it intentionally.
+5. **The CSP is verified for page load and button render, not the full popup flow.** The added Content-Security-Policy allows the specific Google sign-in origins; the sign-in button renders under it and the page loads with no CSP violations, but the complete OAuth popup round-trip should be re-checked in the browser after deploy. If Google sign-in ever breaks after a Google-side change, the CSP `script-src`/`frame-src`/`connect-src` entries for `accounts.google.com` are the first place to look. Rollback is simply removing the `Content-Security-Policy` entry from `vercel.json`.
